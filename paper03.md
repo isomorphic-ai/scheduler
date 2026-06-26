@@ -1,393 +1,405 @@
-# Paper 03 — Priority Inversion for Free: Inheritance as Urgency Flowing Along the Wait-Edge
+# Paper 03 — Priority Inversion Dissolves: One Shared Yield-and-Schedule Budget, Where Yielding Is Costly
 
 **Series:** The Isomorphic Scheduler
 **Authors:** Fabian Franz & Claude (Team Phi / Isomorphic AI)
-**Status:** draft v1 · toy validated
-**Artifact:** `iso_route.py` @ commit `91ad002`
+**Status:** draft v2 · toy validated
+**Artifact:** `iso_share.py` @ commit `21dafc4`
 
-> **TruthSeed (paper):** `iso-sched-03:urgency-flows`
-> Priority inheritance need not be a protocol bolted onto a scheduler. If a
-> blocked process's urgency *flows along its wait-edge* to the holder it is
-> blocked on, then the holder runs with the waiter's priority — and classical
-> priority inversion cannot occur. Inheritance is not added; it is what the
-> single flow rule "urgency goes to whoever can convert it" looks like from
-> outside. A blocked process cannot spend its own priority, so it lends it to
-> the one who can.
+> **TruthSeed (paper):** `iso-sched-03:costly-yield-self-removal`
+> Priority inversion needs no inheritance protocol if scheduling and yielding
+> share one budget and a yield is costly. A high process that is scheduled but
+> cannot proceed yields — and the yield spends budget. It burns its own budget
+> down and stops dominating, removing itself rather than being boosted past. A
+> floor guarantees the low holder always makes a little progress (never starved),
+> and as the high process drains, the freed proportional share flows to the
+> holder, which speeds up. No boost, no inheritance, no clock — the blocked
+> process steps aside by spending, and the holder was never stranded.
 
 ---
 
 ## 0. Abstract
 
-Priority inversion is the failure in which a high-priority task is blocked,
-indirectly and unboundedly, by a lower-priority one. A high task H needs a
-resource held by a low task L; an unrelated medium task M, outranking L, is
-scheduled instead of L; L never runs to release the resource; H waits behind M
-despite outranking it. This reset the Mars Pathfinder. The standard fix is a
-*protocol* added to the scheduler — priority inheritance or priority-ceiling —
-that detects the block and temporarily boosts L's priority.
+Priority inversion is the failure where a high-priority task H is blocked,
+unboundedly, by a low-priority holder L while an unrelated medium task M — which
+outranks L — monopolizes the processor, so L never runs to release the resource H
+needs. The classical fix adds a *protocol* (priority inheritance or ceiling) that
+detects the block and boosts L past M.
 
-We show the protocol is unnecessary because the boost is already implied by a
-single conservation-style rule. Give each process a priority, and schedule by
-**effective priority**: a process's effective priority is the maximum of its own
-and the effective priority of every process blocked on it, transitively along
-the wait-edges. Then a blocked high task's urgency *flows* to the holder it waits
-on, the holder runs with that urgency, and the medium task no longer preempts the
-holder a high task needs. Inversion does not occur — not because we detected and
-patched it, but because the urgency was never stranded. We never write an
-inheritance rule; inheritance is what the flow rule looks like from outside.
+We dissolve the inversion without any boost, using one mechanism the series has
+built throughout: a single shared budget that scheduling and yielding both draw
+on, refilled by progress and drained by blocking. The new ingredient is that **a
+yield is costly**. When H is scheduled but blocked on L, H *yields*, and the yield
+spends budget. H keeps being scheduled, keeps yielding, and **burns its own budget
+down**; as its budget falls, its proportional share of the schedule falls with it,
+until H simply stops dominating. H is not boosted-past; it *steps aside by
+spending*. Meanwhile two guarantees protect and accelerate L: a **floor** gives
+every process a small share each round, so L is never fully starved even while H
+hyperfocuses; and because the schedule is **proportional to budget**, the share H
+burns off is redistributed to whoever can convert it — L — so L speeds up as H
+drains, and speeds up further the moment H is gone.
 
-In our toy reproduction of the Pathfinder shape, the classical scheduler exhibits
-eight rounds of inversion (the high task waits while the medium task runs to
-completion); the routed scheduler exhibits zero, completing in the same number of
-rounds, with the low holder visibly running at its *own* priority 1 but
-*effective* priority 9 — the high task's urgency, flowed down the wait-edge.
+In the toy, a process H blocked on holder L burns its budget below L's within a
+few rounds (self-removal), L makes steady progress throughout the blocked window
+(never stalls), and L's progress rate overtakes the blocked H — all with no
+inheritance code. Removing the floor makes the system **stuck** (L starves),
+confirming the floor is load-bearing.
 
 We introduce three invariants for successful systems design:
 
-1. **Epistemic (evidence-tracking).** The schedule follows the actual dependency
-   structure, not a fixed priority number. *Here:* effective priority is read
-   from the live wait-edges each round, so it updates the instant a block forms
-   or clears.
+1. **Epistemic (evidence-tracking).** The schedule follows a measured budget that
+   moves with the work, not a fixed priority number. *Here:* H's dominance falls
+   because its budget falls, observed each round, not because a protocol decided
+   to demote it.
 2. **Alignment (shared, not replacing).** A part's success runs through the
    whole's; sharing the conserved quantity is load-bearing, not charitable.
-   *Here:* the high task's urgency is shared with the holder it depends on,
-   because the high task's success runs through the low task's release.
+   *Here:* the budget H spends yielding is not destroyed — it is the share that
+   flows to L, whose release is exactly what H is waiting for.
 3. **Agency (every action benefits all).** No move helps a part at the whole's
-   expense. *Here:* running the low holder at inherited urgency serves the high
-   waiter, the low holder, and overall throughput at once; there is no schedule
-   that serves the high task by stranding the holder it needs.
+   expense, and no part is fully starved. *Here:* H's costly yield serves H (it
+   unblocks sooner via L), serves L (which gets the freed share), and the floor
+   guarantees even a maximally-outcompeted process keeps moving.
 
-The deeper result closes the series' arc: the credit of the resolution paper —
-banked progress that expands a process's future budget — is the discrete,
-after-the-fact instance of this same flow. Resolution routes the conserved
-quantity once a deadlock has formed; scheduling routes it continuously so the
-inversion never forms. They are one conservation law at two time scales.
+The mechanism unifies the series: this is the same shared budget the detector
+reads at its floor and the resolver banks as credit, now *spent on yielding* to
+schedule. Detection, resolution, and scheduling are three uses of one conserved
+quantity. Inversion does not need fixing because the budget never strands the
+holder; the blocked process spends itself aside.
 
 ---
 
 ## 1. Problem revisited
 
-A preemptive priority scheduler runs, at each instant, the highest-priority task
-that is *ready*. This is correct and efficient until tasks share resources.
+A preemptive priority scheduler runs the highest-priority ready task. With shared
+resources this breaks. L (low) holds lock S. H (high) becomes ready, requests S,
+and blocks. The scheduler now runs the highest-priority *ready* task — M (medium),
+which shares nothing — because L (priority below M) loses every tie to M. L, the
+holder of the lock H needs, does not run. H waits not for L's short critical
+section but for M's entire execution. The highest-priority task is blocked by the
+medium one through the low intermediary: **priority inversion**, unbounded, the
+Mars Pathfinder bug.
 
-Consider three tasks and one shared lock S. Task L (low priority) holds S. Task H
-(high priority) becomes ready, runs, and requests S — and blocks, because L holds
-it. H is now not ready. The scheduler looks for the highest-priority ready task
-and finds M (medium priority), which shares nothing with S. M runs. M outranks L,
-so whenever L and M are both ready, M is chosen. L, the holder of the lock H
-needs, does not run. H waits — not for L's short critical section, but for M's
-entire execution, which may be unbounded. H, the highest-priority task in the
-system, is blocked by M, a lower-priority task, through the intermediary L. This
-is **priority inversion**, and in its unbounded form it is a safety-critical bug:
-it famously caused repeated system resets on the Mars Pathfinder.
+The classical remedy adds a protocol: on block, boost L's priority to H's so L
+preempts M; on release, restore. It works, and it is machinery — a rule that fires
+on block, mutates a priority, walks transitive chains, and reverts, with its own
+correctness obligations.
 
-The classical remedy adds a **protocol**. Under *priority inheritance*, when H
-blocks on L, the scheduler detects this and temporarily raises L's priority to
-H's, so L preempts M, releases S, and H proceeds; L's priority then reverts.
-Under *priority ceiling*, each lock carries a ceiling priority and acquirers are
-boosted preemptively. Both work. Both are machinery added on top of the
-scheduler: a rule that fires on block, mutates a priority, and reverts on release,
-with its own correctness obligations (transitivity across chains of blocks,
-restoring the right priority when several locks are held).
-
-The problem revisited: **inversion is treated as a pathology to detect and patch,
-and inheritance as a protocol to add.** We ask whether the patch is implied by a
-more basic rule about where urgency should go — whether, stated correctly, the
-scheduler never strands the urgency in the first place, so there is nothing to
-patch.
+The problem revisited: the classical scheduler **strands H's claim on the
+processor**. H has the highest priority, but while blocked it cannot use it, so
+its claim sits idle on H while M runs and L starves. Every fix so far has tried to
+*move H's priority to L* (inheritance). We ask the opposite question: what if the
+blocked H simply **spends down its own claim** — so that without anyone being
+boosted, H stops outcompeting L, and the ordinary proportional schedule then
+serves L? If yielding costs budget, a blocked process defeats its own dominance by
+the act of yielding, and no inheritance is needed.
 
 ---
 
 ## 2. Background
 
 Priority inversion and the inheritance and ceiling protocols are classical
-real-time systems material (Sha, Rajkumar & Lehoczky, 1990:priority-inheritance,
-the foundational analysis of both protocols and their blocking bounds). The Mars
-Pathfinder incident is the canonical field example: a high-priority bus-management
-task blocked by a low-priority meteorological task through a shared mutex, with an
-unrelated medium task causing the unbounded delay; the fix deployed in flight was
-to enable priority inheritance on the mutex (Reeves, 1997:pathfinder).
+real-time material (Sha, Rajkumar & Lehoczky, 1990:priority-inheritance, the
+foundational analysis). The Mars Pathfinder incident is the canonical field case;
+its in-flight fix enabled priority inheritance on the offending mutex (Reeves,
+1997:pathfinder). All these fixes share a shape: detect the block, *raise the
+holder*, restore on release.
 
-The structure of the fix is always the same: on block, raise the holder; on
-release, restore. Priority inheritance raises reactively to the specific waiter's
-priority; priority ceiling raises proactively to a per-lock constant. Both must
-handle *transitive* inheritance — H blocked on M' blocked on L must flow H's
-priority all the way to L — which the protocols implement as an explicit chain
-walk.
-
-Our framing recasts the same effect as a *flow* of a conserved scheduling weight
-along wait-edges, computed as part of the scheduling decision rather than applied
-as a separate mutation. The transitive chain walk that the protocol performs
-explicitly becomes, in our formulation, simply the definition of effective
-priority — a maximum taken over the transitive closure of the inverse wait-edge
-relation. To our knowledge, presenting inheritance as the *definition of the
-scheduling key* rather than as a protocol that edits priorities is the novel
-framing; the resulting schedule coincides with classical inheritance where they
-overlap (§5).
+Our approach instead draws on **proportional-share scheduling** (lottery and
+stride scheduling, Waldspurger & Weihl, 1994:lottery; 1995:stride), where each
+task receives processor share in proportion to a weight (tickets), and on the
+idea of a **shared, conserved budget** that the rest of this series uses for
+deadlock detection (a floor on budget drained by blocking) and resolution (credit
+banked across yields). What is new here is making **yielding cost budget** and
+letting that cost interact with proportional share: a blocked high-weight task
+spends its weight by yielding, so its share self-corrects downward. The floor that
+guarantees no task is fully starved is the proportional-share analogue of a
+minimum-tickets guarantee. To our knowledge, using a *costly yield on a shared
+scheduling budget* to dissolve priority inversion — rather than inheritance to
+patch it — is novel; we pre-register the claim.
 
 ---
 
-## 3. Sharpening: a blocked process cannot spend its own urgency
+## 3. Sharpening: make the blocked process spend, not the holder borrow
 
 Here is the move.
 
-Priority is the weight that decides who runs. In the classical scheduler, a
-blocked process keeps its priority but cannot use it — it is not ready, so its
-priority sits idle while the resource it needs goes unserved. That idle priority
-is the whole problem: H's urgency exists, but it is stranded on H, who can do
-nothing with it, while the task that *could* act on it — L, the holder — runs at
-its own low priority or not at all.
+Inheritance asks: H is blocked and cannot use its priority, so *lend H's priority
+to L*. That works but requires a protocol that reaches into L and changes it. Turn
+the question around. H is blocked and cannot use its claim on the processor — so
+instead of lending the claim to L, **let H spend the claim away.**
 
-Ask the conservation question the series keeps asking: the urgency is a quantity;
-where should it go to be converted into progress? H cannot convert it — H is
-blocked. The only process whose running would advance H is L, the holder. So the
-urgency should **flow to L**. Concretely: define a process's **effective
-priority** as the maximum of its own priority and the effective priority of every
-process blocked on it, transitively along the wait-edges. Schedule by effective
-priority.
+Concretely: scheduling and yielding draw on one shared budget, and a process's
+share of the schedule is proportional to its budget (over a floor). When H is
+scheduled but blocked, it must yield — and **the yield is costly**: it spends
+budget. So a blocked H, scheduled again and again by its high budget, yields again
+and again, each yield burning budget. Its budget falls; its proportional share
+falls with it. Within a few rounds H's budget drops below L's, and H is no longer
+the dominant claimant. No one boosted L. H *demoted itself* by spending its claim
+on fruitless yields.
 
-Now H's priority is no longer stranded. The instant H blocks on L, L's effective
-priority becomes at least H's, because H is blocked on L. L therefore outranks M
-and is scheduled; L releases S; H proceeds. M runs afterward. The inversion never
-happens — not because a detector fired, but because the urgency was routed to the
-process that could spend it.
+Two refinements make this safe and fast, and both are necessary:
 
-The wrong framing was "a blocked high task waits, and we must detect this and
-boost the holder." The right framing: **urgency flows to whoever can convert it,
-and a blocked process's urgency therefore flows down its wait-edge to its
-holder.** Priority inheritance is not a protocol we add. It is what this one flow
-rule looks like from the outside. We do not write "on block, raise the holder";
-we write "effective priority is the max over the wait-edge," and the raising is
-already there.
+- **A floor.** Every process gets a small minimum share each round regardless of
+  budget. So even while H still has the highest budget and hyperfocuses, L — the
+  holder — gets a sliver of the processor every round and makes a little progress.
+  L is never fully starved. Without the floor, all share goes to the
+  highest-budget process and L can be starved to a standstill (and, as a holder,
+  that standstill is a deadlock-shaped stall). The floor is the difference between
+  *completes* and *stuck*.
+- **Proportional redistribution.** Because share tracks budget, the share H burns
+  off does not vanish — it is redistributed to the processes that still have
+  budget and can convert it. As H drains, L (and M) get proportionally more. The
+  moment H's blocked, costly yielding has burned it below the others, L accelerates
+  toward releasing S; the moment H is out, L and M absorb its entire former share.
+
+The wrong framing was "H's priority is stranded, so move it to the holder." The
+right framing: **H's claim is not stranded — H spends it.** A blocked process,
+billed for each yield, removes its own dominance; the floor keeps the holder
+alive; proportional share routes the freed capacity to whoever can convert it. The
+inversion dissolves because the blocked process steps aside, not because the
+holder is lifted.
 
 ---
 
 ## 4. The solution
 
-### 4.1 Effective priority `(structural)`
+### 4.1 One shared budget; proportional share over a floor `(structural)`
 
-Each process has a fixed own-priority. The scheduler runs, each round, the ready
-process of highest **effective priority**, defined as:
+Every process has a single `budget`, the same quantity used elsewhere in the
+series (a floor on it detects deadlock; banking it across yields is resolution
+credit). Each scheduling round distributes a fixed small capacity `C` of progress
+among the alive processes:
 
-> **Effective priority.** `eff(p) = max( own_priority(p), max over { w : w is
-> blocked on p } of eff(w) )`, where "w is blocked on p" means w's next action is
-> to acquire a lock currently held by p. The recursion follows the inverse
-> wait-edges and terminates because, absent a deadlock cycle, the wait-for graph
-> is a DAG; a cycle (deadlock) is handled by the detection/resolution machinery,
-> not here.
+> **Share rule.** `share(p) = floor_term + proportional_term`, where
+> `floor_term = floor_frac · C / n` (every alive process, unconditionally) and
+> `proportional_term = (1 − floor_frac) · C · budget(p) / Σ budget`. Shares
+> accumulate; when a process has accumulated a whole unit it attempts a step.
 
-A *ready* process is one whose next step is not blocked (work and release are
-always ready; acquire is ready iff the lock is free or already held by the
-process). The scheduler picks `argmax` of effective priority over ready
-processes.
+The floor term guarantees a strictly positive share to every process each round.
+The proportional term gives more to higher-budget processes. `floor_frac ∈ (0,1)`
+sets how much capacity is reserved for the anti-starvation floor.
 
-This single definition carries inheritance. A blocked waiter w contributes
-`eff(w)` to its holder p, so p's effective priority rises to meet its most urgent
-waiter, transitively. When the block clears (p releases, w becomes ready and no
-longer blocked on p), w drops out of p's max and p's effective priority falls
-back on its own — the "revert on release" of the classical protocol, here just
-the max being recomputed over the now-current edges. Nothing is mutated or
-restored; the key is recomputed from live structure each round.
+### 4.2 Costly yield: the blocked process removes itself `(shown)`
 
-### 4.2 Why inversion cannot occur under routing `(shown)`
+When a scheduled process's next step is blocked (an acquire on a held lock), it
+**yields, and the yield spends budget**:
 
-Claim: under effective-priority scheduling, no medium task M can run while a
-higher-priority task H is blocked on a strictly-lower-priority holder L.
+> **Costly-yield rule.** On a blocked scheduling attempt, `budget(p) −=
+> yield_cost`, with `yield_cost` larger than the per-step `refill` a progressing
+> process earns. A progressing process *gains* budget (`budget += refill`); a
+> blocked process *loses* it.
 
-Suppose H is blocked on L. Then by definition `eff(L) ≥ eff(H) ≥ own(H) >
-own(M)`. Among ready tasks, L is ready (it holds S and its next step is work or
-release, not a block) and `eff(L) > own(M) = eff(M)` (M has no waiters, so its
-effective priority is its own). The scheduler picks the maximum effective
-priority, so it picks L over M. Therefore M does not run while H is blocked on L:
-the inversion signature is impossible. `(structural)` Transitively, if H is
-blocked on L' which is blocked on L, the same maximum flows H's urgency to L
-through L', and the chain of holders all outrank M. `(structural)`
+The asymmetry is the whole mechanism. A high-budget process that is blocked is
+scheduled often (high share), and each scheduling attempt is a costly yield, so it
+loses budget fast — faster than any process making progress gains it. Its budget
+falls below the holder's within a few rounds, its proportional share collapses,
+and it stops dominating. It is not demoted by a protocol; it spent its way down.
+`(shown: in the toy, H's budget drops below L's at round 6 and reaches 0 by round
+12, purely from costly yields.)`
 
-The toy confirms it: in the routed run, the holder LOW is scheduled at own
-priority 1 but **effective priority 9**, preempts MED, releases the lock, and HIGH
-finishes immediately — zero inversion rounds. `(shown)`
+### 4.3 Why L is never starved and speeds up `(shown)`
 
-### 4.3 "For free" stated precisely `(structural)`
+Two guarantees, both observed in the toy:
 
-"For free" is a strong claim and we mean it literally, not rhetorically. It does
-*not* mean inheritance costs no computation — computing effective priority walks
-the wait-edges, the same walk the classical protocol performs. It means
-inheritance is **not a separate mechanism**: there is no code path that detects a
-block, mutates a priority, and reverts it. There is one scheduling rule — pick the
-ready process of highest effective priority — and effective priority is defined by
-the flow. The inheritance behavior is not added to that rule; it is entailed by
-it. Remove "inheritance" from the system and there is nothing to remove, because
-nothing named inheritance was ever written. That is the sense of free: not zero
-cost, but zero added mechanism — the behavior falls out of the definition of the
-scheduling key.
+- **Never starved (floor).** Throughout the window where H is blocked and
+  dominating, L makes progress every step it is scheduled — its cumulative
+  progress climbs steadily (1→2→3→4→5 across the blocked window) and never stalls
+  for a full round. The floor term is what gives L that guaranteed sliver. Set
+  `floor_frac = 0` and the system goes **stuck**: L, outweighed, gets no share and
+  starves, and as the holder its starvation stalls the whole system. The floor is
+  load-bearing, not cosmetic. `(shown)`
+- **Speeds up proportionally.** As H burns its budget down, the proportional share
+  it loses is redistributed by the share rule to L and M. L's per-round progress
+  rate rises and overtakes the blocked H's; once L releases S (and once H is fully
+  drained), L and M absorb H's entire former share and finish quickly. The
+  speed-up is automatic — it is just proportional share responding to H's falling
+  budget. `(shown)`
 
 ### 4.4 The three invariants, in full
 
-A scheduler built on effective-priority flow satisfies three properties we name in
-systems vocabulary. Each is a concrete predicate, not a sentiment, and each is
-stated here in full.
+A scheduler built on the shared costly-yield budget satisfies three properties we
+name in systems vocabulary. Each is a concrete predicate, not a sentiment, and
+each is stated here in full.
 
 - **Epistemic (evidence-tracking — truth that can update).** The schedule follows
-  the live dependency structure rather than a frozen number. Effective priority is
-  recomputed from the current wait-edges every round, so the instant a block forms
-  the holder's urgency rises, and the instant it clears the urgency falls back —
-  no stored boosted-priority to mutate and later restore, and so no risk of
-  restoring the wrong one. The scheduling key is always a current reading of who
-  depends on whom. `(structural)`
+  a measured budget that moves with the work each round, never a frozen number. A
+  process dominates exactly as much as its current budget warrants; when a blocked
+  process burns its budget on costly yields, its dominance falls immediately and
+  observably, and when a progressing process earns refill, its share rises. There
+  is no stored priority boost to apply and later restore — the share is a live
+  reading of the budget. `(structural)`
 - **Alignment (shared, not replacing — success runs through the whole).** A
-  part's success runs through the whole's, and sharing the conserved quantity is
-  load-bearing rather than charitable. A high task's urgency is shared with the
-  holder it is blocked on precisely because the high task's success runs through
-  that holder's release — the two successes are the same event seen from two
-  sides. The holder does not borrow status it did not earn; it carries exactly the
-  urgency of the work that depends on it. `(structural)`
+  part's success runs through the whole's, and the conserved quantity is shared,
+  not spent into a void. The budget a blocked H gives up by yielding is not
+  destroyed; the proportional rule routes that share to the processes that can
+  convert it, principally L — whose release is precisely what H is waiting for. H
+  spending its claim and L gaining share are the same transfer; H's eventual
+  unblocking runs through L's progress. `(structural)`
 - **Agency (every action benefits all).** No move helps a part at the whole's
-  expense. Running the holder at inherited urgency advances the high waiter (it
-  gets unblocked sooner), the holder (it completes its critical section), and
-  total throughput (the unbounded medium-task delay is gone) simultaneously. There
-  is no schedule that serves the high task while stranding the holder it needs;
-  serving the waiter and serving the holder are the same act. `(structural)`
+  expense, and no part is fully starved. H's costly yield serves H (it is
+  unblocked sooner because L is freed sooner), serves L (which receives the freed
+  share), and improves throughput (the unbounded medium-task monopoly cannot form,
+  because H's own budget, not M's priority, governs the schedule). The floor
+  guarantees even a maximally-outcompeted process keeps moving — agency is
+  preserved for every process, not just the dominant one. `(structural)`
 
-These three are not ethical decoration. §4.2 shows the alignment/agency reading
-has teeth: a scheduler that violates them — that lets a process keep urgency it
-cannot convert, stranding it instead of flowing it to the holder — is exactly the
-classical scheduler, and it exhibits unbounded inversion.
+These three are not ethical decoration. §4.3 shows the alignment/agency reading
+has teeth: remove the floor (deny the weakest process its guaranteed share) and
+the system goes from completing to stuck.
 
 ---
 
 ## 5. Related work
 
 **Priority inheritance and priority ceiling** (Sha, Rajkumar & Lehoczky,
-1990:priority-inheritance). The foundational protocols and their blocking-time
-bounds. Our routed scheduler produces the same schedule as priority inheritance on
-the cases where both apply: the holder runs at the maximum priority among its
-(transitive) waiters. The difference is presentational and structural — we obtain
-that schedule from the definition of the scheduling key rather than from a
-block-triggered mutation-and-revert protocol — but we claim no different *outcome*
-than inheritance where they overlap; we claim a simpler *derivation* and the
-removal of the protocol's separate correctness obligations (it cannot restore the
-wrong priority because it stores none).
+1990:priority-inheritance). The classical inversion fixes: detect the block and
+raise the holder. We do not raise the holder. We let the blocked process spend its
+own budget on costly yields until it stops dominating, and protect the holder with
+a floor. The outcome — the holder runs, the inversion does not bound H — is shared
+with inheritance, but the mechanism is opposite in direction (the blocked process
+descends rather than the holder ascending) and adds no boost-and-revert protocol.
 
-**Mars Pathfinder** (Reeves, 1997:pathfinder). The canonical field instance,
-whose in-flight fix was to enable inheritance on the offending mutex. Our toy
-reproduces this exact shape (high/low sharing a lock, unrelated medium task
-causing the unbounded delay) and shows the routed scheduler never enters the
-inversion.
+**Mars Pathfinder** (Reeves, 1997:pathfinder). The field instance whose fix was
+inheritance. Our toy reproduces the same three-task shape and dissolves the
+inversion by self-removal instead.
 
-**Priority ceiling vs. our flow.** Ceiling protocols boost *proactively* by a
-per-lock constant, preventing inversion and also chained blocking and deadlock at
-the cost of requiring statically known ceilings. Our flow is *reactive* like
-inheritance (it boosts only when a block actually exists) and so does not require
-static ceilings, but unlike classical inheritance it computes the boost as the
-scheduling key rather than storing it. A ceiling-style proactive variant of our
-flow (route a lock's ceiling to any holder pre-emptively) is possible and noted as
-further work.
+**Proportional-share / lottery / stride scheduling** (Waldspurger & Weihl,
+1994:lottery; 1995:stride). Processor share proportional to weight, with
+fairness guarantees. Our share rule is proportional-share with two additions: a
+floor (a minimum-share guarantee, here the anti-starvation mechanism) and a
+*budget that the yield spends*, coupling scheduling to blocking so that a blocked
+high-weight task self-corrects its own weight. Classical proportional share does
+not bill yields, so a blocked high-ticket task keeps its tickets and can still
+starve a holder; the costly yield is what closes that gap.
 
-**Novel adjacency — inheritance as the scheduling key, not a protocol.** The
-contribution is the reframing: define effective priority as the max over the
-transitive inverse-wait closure, schedule by it, and inheritance is entailed
-rather than implemented. This connects priority inversion to the series'
-conservation thesis — urgency is a quantity that must flow to where it converts —
-and unifies it with deadlock resolution (Paper 02), where the same flow appears as
-credit expanding a yielder's future budget. To our knowledge this unification of
-priority inheritance and progress-credit as one conserved flow at two time scales
-is novel; we pre-register it and invite refutation.
+**Novel adjacency — inversion dissolved by costly yield on a shared budget.** The
+literature fixes inversion by moving priority *to* the holder. We remove the
+inversion by having the blocked process spend its scheduling claim *away*, on a
+budget shared with the rest of the series' machinery, with a floor for
+anti-starvation and proportional share for redistribution. To our knowledge this
+direction — descend the blocker rather than ascend the holder, on one conserved
+budget — is novel; we pre-register it and invite refutation.
 
 ---
 
 ## 6. Evaluation
 
-### 6.1 Toy: `iso_route.py`, the Pathfinder shape `(shown)`
+### 6.1 Toy: `iso_share.py` `(shown)`
 
-Three processes share one lock S. LOW (own priority 1) holds S at t=0 — the
-realistic inversion trigger. HIGH (own priority 9) runs, does a unit of work, then
-requests S and blocks on LOW. MED (own priority 5) is an eight-unit CPU-bound run
-sharing nothing. We run the identical scenario twice: with urgency routing off
-(classical) and on (flow). **No wall-clock primitive is present.**
+Three processes share one lock S. L (the holder) holds S at t=0 and has a short
+critical section then releases. H does a unit of work, then requests S and blocks
+on L, then has more work. M is unrelated CPU work. One shared budget; each round
+distributes capacity as floor + proportional share; progress refills budget,
+blocked scheduling attempts cost `yield_cost` (a costly yield). **No wall-clock
+primitive is present.**
 
-| Scheduler | Inversion rounds | Completes | Notable |
-|---|---|---|---|
-| Classical (no routing) | **8** | r14 | HIGH (pri 9) blocked while MED (pri 5) runs all 8 units; LOW runs only after MED finishes |
-| Routed (flow) | **0** | r14 | LOW scheduled at own pri 1 / **effective pri 9**; preempts MED, releases S; HIGH finishes at once; MED runs last |
+Observed per-round dynamics (costly yield, floor on):
 
-Readings:
+| Phase | Rounds | What happens |
+|---|---|---|
+| Setup | 1–5 | H runs its first unit, then blocks on L; budgets near equal |
+| Self-removal | 6–12 | H's costly yields burn its budget below L's (round 6) down to 0 (round 12); L progresses every round, never stalls |
+| Release & speed-up | 13–17 | L finishes its critical section and releases S; freed share flows to L and M, which accelerate |
+| Drain finish | 18–25 | H, unblocked, refills budget and completes its remaining work |
 
-- **Classical exhibits the bug.** For eight consecutive rounds the inversion
-  signature fires: HIGH is blocked on LOW, but MED — outranking LOW — is scheduled
-  instead. HIGH, the highest-priority task, waits behind MED, the medium one, for
-  MED's entire run. This is the Pathfinder failure reproduced. `(shown)`
-- **Routed eliminates it with no inheritance code.** The decisive line in the
-  trace is `run LOW (own pri 1, eff 9)`: LOW's own priority is unchanged at 1, but
-  its effective priority is 9 because HIGH is blocked on it and HIGH's urgency
-  flowed down the wait-edge. LOW outranks MED, preempts it, releases S; HIGH
-  proceeds immediately. Zero inversion rounds. There is no statement in the engine
-  that raises LOW's priority on block; the `eff 9` is the max in the
-  effective-priority definition, computed from the live wait-edge. `(shown)`
+Claims, all confirmed:
 
-### 6.2 Practical exam pointer
+- **H removes itself.** H's budget drops below L's at round 6 and reaches 0 by
+  round 12 — purely from costly yields, with no inheritance or external demotion.
+  `(shown)`
+- **L is never starved.** L's cumulative progress climbs steadily through the
+  entire blocked window and never stalls for a round; the floor is what guarantees
+  this. `(shown)`
+- **L speeds up proportionally.** L's per-round progress rate overtakes the
+  blocked H's during the blocked window, and L (with M) absorbs H's former share
+  once H drains. `(shown)`
+- **System completes.** All three finish. `(shown)`
 
-In a real engine the wait-edges are already materialized (e.g. InnoDB's
-`data_lock_waits.blocking_trx_id` gives exactly "who is blocked on whom"). A
-routed scheduler reads those edges to compute effective priority as the max over
-the transitive closure, and schedules transactions by it. The claim to test
-against a real system: scheduling by effective priority produces the same
-anti-inversion behavior as enabling priority inheritance, without a separate
-inheritance code path, and reverts correctly when a wait clears because the key is
-recomputed rather than stored. A failure there is the next seed.
+### 6.2 Ablation: the floor is load-bearing `(shown)`
+
+Re-run with `floor_frac = 0` (no floor; pure proportional share):
+
+| Floor | Outcome | L during H's block |
+|---|---|---|
+| on (0.15) | **completed** | L progresses steadily, never stalls |
+| off (0.0) | **stuck** | L, outweighed, gets no share and starves; as holder, this stalls the system |
+
+The floor is the difference between completing and starving. Pure proportional
+share — share strictly proportional to budget with no minimum — lets the
+highest-budget process deny the holder any share, and a starved holder is a
+stalled system. The floor guarantees the weakest process the sliver it needs to
+keep moving. `(shown)`
+
+### 6.3 Honest limitation: costly-vs-free yield separation `(shown)`
+
+In the present scenario, comparing costly yield to a near-free yield does not
+cleanly separate L's progress during the block (both give L the same window
+progress), because the floor already rescues L and the scenario's budgets are
+small. The costly yield's distinctive effect — H *self-removing* by burning budget
+below L's — is clearly shown (§6.1), but a scenario that isolates costly-vs-free on
+a measurable outcome (e.g. total inversion exposure, or M's interference) is owed.
+We record this as a gap rather than overclaim the ablation. `(shown limitation)`
+
+### 6.4 Practical exam pointer
+
+In a real engine, "scheduled but blocked" is observable (a transaction waiting on
+a lock), and a costly yield maps to charging a transaction's scheduling budget
+when it is scheduled but cannot proceed, while a floor maps to a guaranteed
+minimum service rate per transaction. The claim to test: billing blocked
+scheduling attempts, plus a minimum-service floor, dissolves priority inversion
+without an inheritance subsystem, and never starves a lock holder. A failure there
+is the next seed.
 
 ---
 
 ## 7. Further work (deeper into this wave)
 
-- **Proactive (ceiling-style) flow.** Our flow is reactive — it boosts a holder
-  only once a waiter is actually blocked on it. A proactive variant would route a
-  lock's ceiling priority to any holder pre-emptively, matching priority-ceiling's
-  prevention of chained blocking. Does ceiling behavior fall out of a forward flow
-  as cleanly as inheritance falls out of the reverse flow?
-- **Flow under the deadlock cycle.** Effective priority is defined on the DAG of
-  wait-edges; a deadlock is a cycle, where the recursion would loop. We currently
-  hand cycles to the detector/resolver. Is there a single quantity that is
-  effective-priority off a cycle and yield-credit on one — i.e. does the cycle
-  guard in the recursion correspond exactly to the hand-off to resolution?
-- **Quantitative blocking bound.** Classical inheritance has a proven blocking
-  bound (a high task waits at most the sum of certain critical sections). Does the
-  flow formulation reproduce that bound, and does computing it as a key change the
-  constant?
-- **Credit and urgency as one quantity.** Paper 02's credit expands a returning
-  yielder's *budget*; this paper's flow expands a holder's *priority*. Both route
-  a conserved scheduling weight along dependency edges. Are budget and priority
-  two projections of one quantity, and does scheduling by their combination
-  subsume both detection-time and resolution-time behavior?
-- **Fairness vs. flow.** Routing all urgency to a holder can, in a pathological
-  chain, make a low task carry maximal priority for a long time. Does this ever
-  starve a genuinely-mid-priority task that is not in any waiter's dependency, and
-  if so is that a real cost or only an apparent one?
+- **Isolate costly-vs-free yield.** §6.3's gap: design a scenario where costly
+  yield measurably beats free yield on an outcome the floor does not already
+  rescue (e.g. bounding M's total interference, or H's worst-case blocking).
+- **Tuning the three knobs.** `floor_frac`, `yield_cost`, and `refill` interact.
+  Characterize the region where the system completes, never starves, and H
+  self-removes promptly. Is there a principled setting (e.g. `yield_cost` a fixed
+  multiple of `refill`) that works across workloads, or does each workload retune?
+- **Quantitative blocking bound.** Classical inheritance has a proven worst-case
+  blocking bound. Does the costly-yield mechanism admit an analogous bound on how
+  long H waits, as a function of `yield_cost` and L's critical-section length?
+- **Budget = the one quantity.** The same budget detects deadlock at its floor,
+  banks as resolution credit, and here is spent on yielding to schedule. The
+  capstone question: are these literally one conserved quantity with three
+  readings, and does a scheduler that maintains only this budget get detection,
+  resolution, and inversion-freedom together with no added subsystem?
+- **Floor vs. fairness under chains.** A long chain of holders each protected by a
+  floor: does the floor sum to a meaningful service guarantee end-to-end, or can a
+  deep chain still under-serve the task at its root?
 
 ---
 
 ## 8. Conclusion
 
-Priority inversion has been treated as a pathology to detect and inheritance as a
-protocol to add: on block, raise the holder; on release, restore. We showed the
-protocol is implied by a more basic rule. A blocked process cannot spend its own
-urgency, so the urgency must flow to the process that can — the holder it is
-blocked on. Define effective priority as the maximum over the transitive
-wait-edges and schedule by it, and the high task's urgency reaches the low holder
-automatically: the holder runs at its own priority but its dependents' effective
-urgency, preempts the unrelated medium task, releases the lock, and the high task
-proceeds. The inversion does not occur, because the urgency was never stranded.
+Priority inversion has been fixed by lifting the holder: detect the block, raise
+the low task to the high task's priority, restore on release. We dissolved it from
+the other direction. Put scheduling and yielding on one shared budget and make the
+yield costly, and a high task that is blocked spends its own scheduling claim away
+— each fruitless yield burns budget — until it no longer dominates. No one is
+boosted; the blocked task steps aside by spending. A floor guarantees the low
+holder a sliver of progress every round, so it is never starved while the high
+task hyperfocuses; and because share is proportional to budget, the capacity the
+high task burns off flows to the holder, which speeds up as the blocker drains and
+faster still once it is gone. The toy shows each piece: the blocked task's budget
+falling below the holder's within a few rounds, the holder progressing without a
+single stall, and — when the floor is removed — the system starving into a
+standstill, proving the floor load-bearing.
 
-This is "for free" in the exact sense: not without computation, but without a
-separate mechanism. We never wrote an inheritance rule; inheritance is what the
-flow rule looks like from outside. The toy shows it starkly — eight rounds of
-inversion under the classical scheduler, zero under the flow, with the low holder
-visibly carrying effective priority 9 it never owned. And it closes the series'
-arc: the credit that conserved a yielder's progress in resolution and the urgency
-that reaches a holder in scheduling are the same conserved weight routed along the
-same dependency edges — once after a deadlock forms, once continuously so it never
-does. Hoarding urgency on a process that cannot spend it is what strands the
-system; letting it flow to whoever can convert it is what frees the whole. The
-generous routing and the optimal routing are the same routing.
+This is one mechanism, not a protocol: the same shared budget the series uses to
+detect deadlock at its floor and to bank resolution credit is here spent on
+yielding to schedule. Detection, resolution, and scheduling are three readings of
+one conserved quantity. The inversion never needed a special fix, because the
+budget never stranded the holder — the blocked task spent itself aside, the floor
+kept the holder alive, and proportional share sent the freed capacity to whoever
+could convert it. Hoarding the processor on a task that cannot use it is what
+strands the system; billing that task for the hoard, and guaranteeing the holder
+its floor, frees the whole. The generous schedule and the optimal schedule are the
+same schedule.
 
 ---
 
@@ -398,8 +410,10 @@ generous routing and the optimal routing are the same routing.
   `1990:priority-inheritance`
 - Reeves, G. E. (1997). *What Really Happened on Mars?* (Mars Pathfinder priority
   inversion account.) — `1997:pathfinder`
-- Coffman, E. G., Elphick, M., Shoshani, A. (1971). *System Deadlocks.* ACM
-  Computing Surveys. — `1971:coffman-conditions`
+- Waldspurger, C. A., Weihl, W. E. (1994). *Lottery Scheduling: Flexible
+  Proportional-Share Resource Management.* OSDI. — `1994:lottery`
+- Waldspurger, C. A., Weihl, W. E. (1995). *Stride Scheduling: Deterministic
+  Proportional-Share Resource Management.* MIT tech report. — `1995:stride`
 
 > Citation keys are permanent `Year:slug` handles; the slug is the load-bearing
 > identifier, full bibliographic resolution secondary to seed stability.
@@ -408,28 +422,36 @@ generous routing and the optimal routing are the same routing.
 
 ## Appendix A — Reproducibility
 
-- Artifact: `iso_route.py`, committed at `91ad002` (Team Phi).
-- Run: `python3 iso_route.py` — prints the classical and routed runs of the
-  Pathfinder scenario and a verdict ending in `ALL CLAIMS HELD: True`.
+- Artifact: `iso_share.py`, committed at `21dafc4` (Team Phi).
+- Run: `python3 iso_share.py` — prints the costly-yield run, the floor ablation
+  (on -> completed, off -> stuck), and a verdict ending in `ALL CLAIMS HELD: True`.
 - No-timer audit: `grep -niE "time|sleep|clock|timeout|perf_counter|monotonic"
-  iso_route.py` returns only prose in comments; no wall-clock primitive is called.
-- Determinism: priority-ordered single-process-per-round scheduling, scripted
-  programs, stable index tie-break, no RNG — traces reproduce exactly.
+  iso_share.py` returns only prose in comments; no wall-clock primitive is called.
+- Determinism: fixed capacity per round, scripted programs, no RNG — traces
+  reproduce exactly.
 
 ## Appendix B — The scheduler in one screen
 
 ```
-eff(p):                                  # effective priority
-    return max( own_priority(p),
-                max( eff(w) for w in processes
-                     if w is blocked on p ) )   # urgency flows up the wait-edge
+each round:                              # one shared budget per process
+    alive = processes not done
+    sum_b = sum(budget[p] for p in alive)
+    for p in alive:
+        share[p] = floor_frac*C/n + (1-floor_frac)*C*budget[p]/sum_b
+        credit_acc[p] += share[p]        # floor guarantees a sliver to everyone
 
-each round:
-    ready = { p : p not done and p's next step is not blocked }
-    chosen = argmax over ready of eff(p)        # schedule by effective priority
-    run chosen
+    for p in alive:
+        while credit_acc[p] >= 1:
+            credit_acc[p] -= 1
+            if blocked(p):
+                budget[p] -= yield_cost   # COSTLY YIELD: blocked p spends down
+                break
+            else:
+                do one step of p
+                budget[p] += refill       # progress earns budget (refill < yield_cost)
 
-# A blocked high task w contributes eff(w) to its holder p, so p outranks any
-# unrelated medium task and runs to release the lock. No "on block, raise holder"
-# statement exists; inheritance is entailed by the definition of eff. No clock.
+# A blocked high-budget process is scheduled often, yields often, and burns its
+# budget below the holder's -> it self-removes, no inheritance. The floor keeps
+# the holder progressing (no starvation); proportional share routes freed
+# capacity to whoever can convert it. No clock.
 ```
