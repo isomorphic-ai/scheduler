@@ -1,405 +1,378 @@
-# Paper 03 — Priority Inversion Dissolves: One Shared Yield-and-Schedule Budget, Where Yielding Is Costly
+# Paper 03 — Priority as a Flow Rate: Memoryless Self-Organising Scheduling and the Dissolution of Inversion
 
-**Series:** The Isomorphic Scheduler
+**Series:** The Isomorphic Scheduler (Axis 03: Focus)
 **Authors:** Fabian Franz & Claude (Team Phi / Isomorphic AI)
-**Status:** draft v2 · toy validated
-**Artifact:** `iso_share.py` @ commit `21dafc4`
+**Status:** draft v3 · toy validated
+**Artifact:** `iso_flow.py` @ commit `dc6ae01`
 
-> **TruthSeed (paper):** `iso-sched-03:costly-yield-self-removal`
-> Priority inversion needs no inheritance protocol if scheduling and yielding
-> share one budget and a yield is costly. A high process that is scheduled but
-> cannot proceed yields — and the yield spends budget. It burns its own budget
-> down and stops dominating, removing itself rather than being boosted past. A
-> floor guarantees the low holder always makes a little progress (never starved),
-> and as the high process drains, the freed proportional share flows to the
-> holder, which speeds up. No boost, no inheritance, no clock — the blocked
-> process steps aside by spending, and the holder was never stranded.
+> **TruthSeed (paper):** `iso-sched-03:priority-is-a-rate`
+> Priority is a *rate*, not a stock. Each process is a bucket filled by a stream
+> whose rate is its priority; at every instant the available progress is divided
+> among the processes currently at the table, in proportion to their rates. When
+> a high-priority process is blocked it is simply not at the table, so the others'
+> shares rise automatically to fill the gap — no demotion, no penalty. When it
+> returns, its rate never changed, so it eats at full share immediately — no
+> climb-back, no debt. The allocation at NOW depends only on who is present and
+> their rates: memoryless, and therefore isomorphic. Priority inversion cannot
+> form, because a blocked process holds no claim on the processor to invert.
 
 ---
 
 ## 0. Abstract
 
 Priority inversion is the failure where a high-priority task H is blocked,
-unboundedly, by a low-priority holder L while an unrelated medium task M — which
-outranks L — monopolizes the processor, so L never runs to release the resource H
-needs. The classical fix adds a *protocol* (priority inheritance or ceiling) that
-detects the block and boosts L past M.
+unboundedly, by a low-priority holder L while an unrelated medium task M
+monopolizes the processor. The classical fix adds an inheritance protocol that
+detects the block and boosts L. We give a scheduler in which the inversion cannot
+form and no protocol is added, by making priority a **flow rate** rather than a
+fixed number or a depletable stock.
 
-We dissolve the inversion without any boost, using one mechanism the series has
-built throughout: a single shared budget that scheduling and yielding both draw
-on, refilled by progress and drained by blocking. The new ingredient is that **a
-yield is costly**. When H is scheduled but blocked on L, H *yields*, and the yield
-spends budget. H keeps being scheduled, keeps yielding, and **burns its own budget
-down**; as its budget falls, its proportional share of the schedule falls with it,
-until H simply stops dominating. H is not boosted-past; it *steps aside by
-spending*. Meanwhile two guarantees protect and accelerate L: a **floor** gives
-every process a small share each round, so L is never fully starved even while H
-hyperfocuses; and because the schedule is **proportional to budget**, the share H
-burns off is redistributed to whoever can convert it — L — so L speeds up as H
-drains, and speeds up further the moment H is gone.
+Picture each process as a bucket filled by a stream; the stream's rate is the
+process's priority (its *focus*). At each instant, the available progress — the
+cake — is divided among the processes **currently at the table** (alive, runnable,
+not blocked) in proportion to their rates. Three behaviours follow with no extra
+mechanism. **When H is away** (blocked, or finished), it takes no share, so the
+cake divides among those present and the others' shares — including the holder
+L's — **rise automatically**. **When H returns**, its rate is unchanged, so it
+**immediately resumes its full share**; there is no penalty to repay and no
+priority to restore, because nothing was spent or stored. And **L is never
+starved**: while at the table with a positive rate it always receives a positive
+share.
 
-In the toy, a process H blocked on holder L burns its budget below L's within a
-few rounds (self-removal), L makes steady progress throughout the blocked window
-(never stalls), and L's progress rate overtakes the blocked H — all with no
-inheritance code. Removing the floor makes the system **stuck** (L starves),
-confirming the floor is load-bearing.
+This is *memoryless*: the allocation at time NOW is a pure function of who is
+present now and their rates, with no dependence on the history of blocking or
+yielding. That memorylessness is what makes it isomorphic — the schedule is the
+same structure re-evaluated each instant, not a stateful protocol accumulating
+boosts and debts. In the toy, a high process blocks and leaves the table; the
+holder's share rises (and reaches the whole cake when it is the only one present);
+the high process returns and instantly takes its full rate proportion (0.90 of the
+cake against the holder, exactly 9/(9+1)) with zero penalty for ten rounds
+blocked. Priority inversion never forms because a blocked process holds no
+processor claim to be inverted.
 
 We introduce three invariants for successful systems design:
 
-1. **Epistemic (evidence-tracking).** The schedule follows a measured budget that
-   moves with the work, not a fixed priority number. *Here:* H's dominance falls
-   because its budget falls, observed each round, not because a protocol decided
-   to demote it.
+1. **Epistemic (evidence-tracking).** The schedule is a live reading of present
+   demand, never a stored boost or debt. *Here:* a process's share is computed
+   from who is at the table right now and their rates, recomputed each instant.
 2. **Alignment (shared, not replacing).** A part's success runs through the
    whole's; sharing the conserved quantity is load-bearing, not charitable.
-   *Here:* the budget H spends yielding is not destroyed — it is the share that
-   flows to L, whose release is exactly what H is waiting for.
+   *Here:* the share a blocked process does not take is not held in reserve for it
+   — it flows to those who can convert it now, principally the holder it waits on.
 3. **Agency (every action benefits all).** No move helps a part at the whole's
-   expense, and no part is fully starved. *Here:* H's costly yield serves H (it
-   unblocks sooner via L), serves L (which gets the freed share), and the floor
-   guarantees even a maximally-outcompeted process keeps moving.
+   expense, and no part is starved. *Here:* H leaving the table speeds L (which
+   gets the freed share) and costs H nothing on return; the floor on rate keeps
+   even the lowest-rate process moving.
 
-The mechanism unifies the series: this is the same shared budget the detector
-reads at its floor and the resolver banks as credit, now *spent on yielding* to
-schedule. Detection, resolution, and scheduling are three uses of one conserved
-quantity. Inversion does not need fixing because the budget never strands the
-holder; the blocked process spends itself aside.
+We set the rates — the priorities, the focus — and the system self-organises: who
+eats how much is always just the instantaneous proportion of present demand.
+Focus is this paper's axis, and the scheduler is its mechanism.
 
 ---
 
 ## 1. Problem revisited
 
 A preemptive priority scheduler runs the highest-priority ready task. With shared
-resources this breaks. L (low) holds lock S. H (high) becomes ready, requests S,
-and blocks. The scheduler now runs the highest-priority *ready* task — M (medium),
-which shares nothing — because L (priority below M) loses every tie to M. L, the
-holder of the lock H needs, does not run. H waits not for L's short critical
-section but for M's entire execution. The highest-priority task is blocked by the
-medium one through the low intermediary: **priority inversion**, unbounded, the
+resources this inverts. L (low) holds lock S; H (high) requests S and blocks; the
+scheduler runs M (medium), which outranks L; L, the holder of the lock H needs,
+does not run; H waits behind M's entire execution. The highest task is blocked by
+the medium one through the low intermediary — unbounded priority inversion, the
 Mars Pathfinder bug.
 
-The classical remedy adds a protocol: on block, boost L's priority to H's so L
-preempts M; on release, restore. It works, and it is machinery — a rule that fires
-on block, mutates a priority, walks transitive chains, and reverts, with its own
+The classical remedy adds a protocol: on block, raise L to H's priority so L
+preempts M; on release, restore. It is stateful machinery — a boost applied on
+block, a chain walked transitively, a priority restored on release — with its own
 correctness obligations.
 
-The problem revisited: the classical scheduler **strands H's claim on the
-processor**. H has the highest priority, but while blocked it cannot use it, so
-its claim sits idle on H while M runs and L starves. Every fix so far has tried to
-*move H's priority to L* (inheritance). We ask the opposite question: what if the
-blocked H simply **spends down its own claim** — so that without anyone being
-boosted, H stops outcompeting L, and the ordinary proportional schedule then
-serves L? If yielding costs budget, a blocked process defeats its own dominance by
-the act of yielding, and no inheritance is needed.
+The problem revisited: the classical model treats priority as a **fixed claim a
+task always holds**, even while blocked. A blocked H still "has" top priority, so
+the scheduler must reason about that idle claim and patch around it. But a blocked
+task can do nothing with the processor — its claim is fictional in that moment. We
+ask: what if priority is not a fixed claim but a **rate of flow**, and the
+processor is divided each instant only among tasks that can actually use it? Then a
+blocked task simply isn't competing — it holds no claim to invert — and there is
+nothing to patch.
 
 ---
 
 ## 2. Background
 
-Priority inversion and the inheritance and ceiling protocols are classical
-real-time material (Sha, Rajkumar & Lehoczky, 1990:priority-inheritance, the
-foundational analysis). The Mars Pathfinder incident is the canonical field case;
-its in-flight fix enabled priority inheritance on the offending mutex (Reeves,
-1997:pathfinder). All these fixes share a shape: detect the block, *raise the
-holder*, restore on release.
+Priority inversion and the inheritance/ceiling protocols are classical real-time
+material (Sha, Rajkumar & Lehoczky, 1990:priority-inheritance). The Mars
+Pathfinder incident is the canonical field case, fixed in flight by enabling
+inheritance on the offending mutex (Reeves, 1997:pathfinder). These fixes share a
+shape: a blocked high task retains its priority claim, and a protocol transfers
+that claim to the holder.
 
-Our approach instead draws on **proportional-share scheduling** (lottery and
-stride scheduling, Waldspurger & Weihl, 1994:lottery; 1995:stride), where each
-task receives processor share in proportion to a weight (tickets), and on the
-idea of a **shared, conserved budget** that the rest of this series uses for
-deadlock detection (a floor on budget drained by blocking) and resolution (credit
-banked across yields). What is new here is making **yielding cost budget** and
-letting that cost interact with proportional share: a blocked high-weight task
-spends its weight by yielding, so its share self-corrects downward. The floor that
-guarantees no task is fully starved is the proportional-share analogue of a
-minimum-tickets guarantee. To our knowledge, using a *costly yield on a shared
-scheduling budget* to dissolve priority inversion — rather than inheritance to
-patch it — is novel; we pre-register the claim.
+Our model is **proportional-share scheduling** (lottery and stride scheduling,
+Waldspurger & Weihl, 1994:lottery; 1995:stride): each runnable task receives
+processor share in proportion to a weight. We take the weight to be a *rate* and
+make the share strictly instantaneous — divided only among tasks *currently
+runnable*, recomputed each quantum. The contributions over textbook
+proportional-share are: (i) the explicit *bucket-filled-by-a-stream* reading,
+which makes priority a rate and the schedule memoryless; (ii) the observation that
+this dissolves priority inversion with no inheritance, because a blocked task is
+not runnable and so holds no share to invert; and (iii) a minimum-rate floor as
+the anti-starvation guarantee. Proportional-share fairness is classically about
+throughput over time; we use the *instantaneous* division and its memorylessness
+as the structural property, and connect it to the series' conserved-quantity
+thesis. To our knowledge framing priority inversion's dissolution as a consequence
+of instantaneous rate-proportional share is novel; we pre-register the claim.
 
 ---
 
-## 3. Sharpening: make the blocked process spend, not the holder borrow
+## 3. Sharpening: a bucket filled by a stream
 
 Here is the move.
 
-Inheritance asks: H is blocked and cannot use its priority, so *lend H's priority
-to L*. That works but requires a protocol that reaches into L and changes it. Turn
-the question around. H is blocked and cannot use its claim on the processor — so
-instead of lending the claim to L, **let H spend the claim away.**
+Stop treating priority as a number a task carries and start treating it as the
+**rate of a stream filling the task's bucket**. A high-focus task has a fat
+stream; a low-focus task a thin one. At each instant the scheduler looks at the
+buckets of the tasks **at the table** — runnable right now — and serves progress
+in proportion to their rates. That is the entire scheduler.
 
-Concretely: scheduling and yielding draw on one shared budget, and a process's
-share of the schedule is proportional to its budget (over a floor). When H is
-scheduled but blocked, it must yield — and **the yield is costly**: it spends
-budget. So a blocked H, scheduled again and again by its high budget, yields again
-and again, each yield burning budget. Its budget falls; its proportional share
-falls with it. Within a few rounds H's budget drops below L's, and H is no longer
-the dominant claimant. No one boosted L. H *demoted itself* by spending its claim
-on fruitless yields.
+Now watch the three things happen with no added rule.
 
-Two refinements make this safe and fast, and both are necessary:
+- **A task leaves the table** (it blocks on a held lock, or finishes). It is no
+  longer served. The cake that instant divides among those still present, so their
+  shares **rise automatically** — the holder L, present and runnable, gets a larger
+  slice precisely because the high task H is not competing. No one demoted H; H
+  removed itself from the division by being unable to eat, and the proportion
+  rebalanced. When L is the only one left at the table, L gets the whole cake.
+- **A task returns to the table** (its lock frees). Its stream never stopped, its
+  rate is unchanged, so the instant it is runnable again it takes its full
+  rate-proportion of the cake — **immediately**, with no penalty. There is no debt
+  to repay (nothing was spent) and no priority to restore (nothing was changed).
+  The high task, blocked for many rounds, resumes at exactly the share its rate
+  dictates against whoever is now present.
+- **No task starves.** As long as a task is at the table with a positive rate it
+  gets a positive share every instant. A small minimum-rate floor guards against a
+  degenerate (zero) rate, but the basic guarantee is structural: present demand is
+  always served.
 
-- **A floor.** Every process gets a small minimum share each round regardless of
-  budget. So even while H still has the highest budget and hyperfocuses, L — the
-  holder — gets a sliver of the processor every round and makes a little progress.
-  L is never fully starved. Without the floor, all share goes to the
-  highest-budget process and L can be starved to a standstill (and, as a holder,
-  that standstill is a deadlock-shaped stall). The floor is the difference between
-  *completes* and *stuck*.
-- **Proportional redistribution.** Because share tracks budget, the share H burns
-  off does not vanish — it is redistributed to the processes that still have
-  budget and can convert it. As H drains, L (and M) get proportionally more. The
-  moment H's blocked, costly yielding has burned it below the others, L accelerates
-  toward releasing S; the moment H is out, L and M absorb its entire former share.
-
-The wrong framing was "H's priority is stranded, so move it to the holder." The
-right framing: **H's claim is not stranded — H spends it.** A blocked process,
-billed for each yield, removes its own dominance; the floor keeps the holder
-alive; proportional share routes the freed capacity to whoever can convert it. The
-inversion dissolves because the blocked process steps aside, not because the
-holder is lifted.
+The wrong framing was "a blocked high task keeps its priority claim, which we must
+transfer to the holder." The right framing: **a blocked task is simply not at the
+table, so it holds no claim and the division rebalances to those who can eat.**
+Priority is a rate, the schedule is the instantaneous proportion of present
+demand, and it is memoryless — the state at NOW depends only on who is present now
+and their rates. That memorylessness is exactly what makes the scheduler
+isomorphic: the same structure re-read each instant, never a stateful accumulation
+of boosts and debts.
 
 ---
 
 ## 4. The solution
 
-### 4.1 One shared budget; proportional share over a floor `(structural)`
+### 4.1 Rate-proportional instantaneous share `(structural)`
 
-Every process has a single `budget`, the same quantity used elsewhere in the
-series (a floor on it detects deadlock; banking it across yields is resolution
-credit). Each scheduling round distributes a fixed small capacity `C` of progress
-among the alive processes:
+Each process has a fixed `rate` (its priority / focus). Each scheduling instant
+distributes a fixed capacity `C` of progress:
 
-> **Share rule.** `share(p) = floor_term + proportional_term`, where
-> `floor_term = floor_frac · C / n` (every alive process, unconditionally) and
-> `proportional_term = (1 − floor_frac) · C · budget(p) / Σ budget`. Shares
-> accumulate; when a process has accumulated a whole unit it attempts a step.
+> **Flow rule.** Let `T` be the set of processes *at the table* — alive, not done,
+> and runnable now (next step is not a blocked acquire). Each `p ∈ T` receives
+> `share(p) = C · rate(p) / Σ_{q ∈ T} rate(q)`. Processes not at the table receive
+> nothing. Shares accumulate; a whole accumulated unit is one step.
 
-The floor term guarantees a strictly positive share to every process each round.
-The proportional term gives more to higher-budget processes. `floor_frac ∈ (0,1)`
-sets how much capacity is reserved for the anti-starvation floor.
+`T` is recomputed every instant, so the denominator shrinks the moment a task
+leaves and grows when one returns. A small floor `rate(p) ← max(rate(p),
+ε)` guards degenerate rates; the anti-starvation property otherwise follows from
+"present demand is always in the denominator and so always served."
 
-### 4.2 Costly yield: the blocked process removes itself `(shown)`
+### 4.2 Why inversion cannot form `(structural)`
 
-When a scheduled process's next step is blocked (an acquire on a held lock), it
-**yields, and the yield spends budget**:
+In the classical model a blocked high task retains a top-priority claim that the
+scheduler must honour, which is what lets it block the holder's progress
+indirectly. Here a blocked task is **not in `T`** — it has no share at all while
+blocked. So it cannot, by holding an idle claim, deprive the holder of the
+processor: the holder is in `T`, the blocked task is not, and the division serves
+the holder. The medium task M and the holder L split the cake by their rates; L
+runs and releases the lock; the high task H rejoins `T` and resumes. There is no
+instant at which H's idle claim prevents L from running, because H has no claim
+while blocked. Inversion is not detected-and-patched; it is *structurally absent*.
+`(structural)`
 
-> **Costly-yield rule.** On a blocked scheduling attempt, `budget(p) −=
-> yield_cost`, with `yield_cost` larger than the per-step `refill` a progressing
-> process earns. A progressing process *gains* budget (`budget += refill`); a
-> blocked process *loses* it.
+### 4.3 Memorylessness, stated precisely `(shown)`
 
-The asymmetry is the whole mechanism. A high-budget process that is blocked is
-scheduled often (high share), and each scheduling attempt is a costly yield, so it
-loses budget fast — faster than any process making progress gains it. Its budget
-falls below the holder's within a few rounds, its proportional share collapses,
-and it stops dominating. It is not demoted by a protocol; it spent its way down.
-`(shown: in the toy, H's budget drops below L's at round 6 and reaches 0 by round
-12, purely from costly yields.)`
-
-### 4.3 Why L is never starved and speeds up `(shown)`
-
-Two guarantees, both observed in the toy:
-
-- **Never starved (floor).** Throughout the window where H is blocked and
-  dominating, L makes progress every step it is scheduled — its cumulative
-  progress climbs steadily (1→2→3→4→5 across the blocked window) and never stalls
-  for a full round. The floor term is what gives L that guaranteed sliver. Set
-  `floor_frac = 0` and the system goes **stuck**: L, outweighed, gets no share and
-  starves, and as the holder its starvation stalls the whole system. The floor is
-  load-bearing, not cosmetic. `(shown)`
-- **Speeds up proportionally.** As H burns its budget down, the proportional share
-  it loses is redistributed by the share rule to L and M. L's per-round progress
-  rate rises and overtakes the blocked H's; once L releases S (and once H is fully
-  drained), L and M absorb H's entire former share and finish quickly. The
-  speed-up is automatic — it is just proportional share responding to H's falling
-  budget. `(shown)`
+The scheduler's allocation at any instant is a pure function of `(T, rates)` —
+which tasks are at the table now and their fixed rates. It does not depend on how
+long any task was blocked, how many times it yielded, or what it did before. We
+verify the consequence that matters: a task returning from a long block resumes at
+exactly the share its rate dictates against the currently-present tasks, identical
+to what it would get had it never blocked. In the toy, H returns after ten rounds
+blocked and immediately receives 0.90 of the cake against L — exactly `9/(9+1)`,
+its uncontested rate proportion — with no penalty. `(shown)` This is the precise
+content of "no climb-back, no debt": memorylessness makes return free.
 
 ### 4.4 The three invariants, in full
 
-A scheduler built on the shared costly-yield budget satisfies three properties we
-name in systems vocabulary. Each is a concrete predicate, not a sentiment, and
-each is stated here in full.
+A scheduler built on instantaneous rate-proportional share satisfies three
+properties we name in systems vocabulary. Each is a concrete predicate, not a
+sentiment, and each is stated here in full.
 
-- **Epistemic (evidence-tracking — truth that can update).** The schedule follows
-  a measured budget that moves with the work each round, never a frozen number. A
-  process dominates exactly as much as its current budget warrants; when a blocked
-  process burns its budget on costly yields, its dominance falls immediately and
-  observably, and when a progressing process earns refill, its share rises. There
-  is no stored priority boost to apply and later restore — the share is a live
-  reading of the budget. `(structural)`
+- **Epistemic (evidence-tracking — truth that can update).** The schedule is a
+  live reading of present demand, recomputed each instant, never a stored boost or
+  accumulated debt. A task's share is exactly its rate's proportion among those at
+  the table now; the instant the table changes — someone blocks, someone returns,
+  someone finishes — the shares update with no protocol firing, no state to
+  reconcile, and no possibility of restoring a wrong value because nothing is
+  stored. `(structural)`
 - **Alignment (shared, not replacing — success runs through the whole).** A
-  part's success runs through the whole's, and the conserved quantity is shared,
-  not spent into a void. The budget a blocked H gives up by yielding is not
-  destroyed; the proportional rule routes that share to the processes that can
-  convert it, principally L — whose release is precisely what H is waiting for. H
-  spending its claim and L gaining share are the same transfer; H's eventual
-  unblocking runs through L's progress. `(structural)`
+  part's success runs through the whole's, and the conserved capacity is shared,
+  not reserved. The share a blocked task does not take is not held aside for it; it
+  flows that instant to the tasks that can convert it, principally the holder the
+  blocked task is waiting on — whose release is exactly what the blocked task
+  needs. The blocked task's eventual progress runs through the holder's, and the
+  freed share is what advances the holder. `(structural)`
 - **Agency (every action benefits all).** No move helps a part at the whole's
-  expense, and no part is fully starved. H's costly yield serves H (it is
-  unblocked sooner because L is freed sooner), serves L (which receives the freed
-  share), and improves throughput (the unbounded medium-task monopoly cannot form,
-  because H's own budget, not M's priority, governs the schedule). The floor
-  guarantees even a maximally-outcompeted process keeps moving — agency is
-  preserved for every process, not just the dominant one. `(structural)`
+  expense, and no part is starved. A high task leaving the table speeds the holder
+  (which receives the freed share) and costs the high task nothing on return (its
+  rate is intact); the floor on rate keeps even the lowest-focus task moving every
+  instant. There is no schedule that serves the high task by stranding the holder,
+  because while the high task is blocked it is not in the division at all and the
+  holder is served by construction. `(structural)`
 
-These three are not ethical decoration. §4.3 shows the alignment/agency reading
-has teeth: remove the floor (deny the weakest process its guaranteed share) and
-the system goes from completing to stuck.
+These three are not ethical decoration. §4.2 shows the alignment/agency reading is
+structural: because a blocked task holds no share, serving the holder is automatic
+and inversion cannot form.
 
 ---
 
 ## 5. Related work
 
 **Priority inheritance and priority ceiling** (Sha, Rajkumar & Lehoczky,
-1990:priority-inheritance). The classical inversion fixes: detect the block and
-raise the holder. We do not raise the holder. We let the blocked process spend its
-own budget on costly yields until it stops dominating, and protect the holder with
-a floor. The outcome — the holder runs, the inversion does not bound H — is shared
-with inheritance, but the mechanism is opposite in direction (the blocked process
-descends rather than the holder ascending) and adds no boost-and-revert protocol.
+1990:priority-inheritance). Classical inversion fixes: a blocked high task retains
+its priority and a protocol transfers it to the holder. We retain no claim for a
+blocked task — it leaves the table — so no transfer is needed. The outcome (the
+holder runs, the high task is not unbounded-blocked) is shared; the mechanism is
+absent rather than added.
 
-**Mars Pathfinder** (Reeves, 1997:pathfinder). The field instance whose fix was
-inheritance. Our toy reproduces the same three-task shape and dissolves the
-inversion by self-removal instead.
+**Mars Pathfinder** (Reeves, 1997:pathfinder). The field instance fixed by
+inheritance. Our toy reproduces the three-task shape and shows inversion never
+forms under rate-proportional share.
 
-**Proportional-share / lottery / stride scheduling** (Waldspurger & Weihl,
-1994:lottery; 1995:stride). Processor share proportional to weight, with
-fairness guarantees. Our share rule is proportional-share with two additions: a
-floor (a minimum-share guarantee, here the anti-starvation mechanism) and a
-*budget that the yield spends*, coupling scheduling to blocking so that a blocked
-high-weight task self-corrects its own weight. Classical proportional share does
-not bill yields, so a blocked high-ticket task keeps its tickets and can still
-starve a holder; the costly yield is what closes that gap.
+**Lottery and stride scheduling** (Waldspurger & Weihl, 1994:lottery;
+1995:stride). Proportional-share by tickets/strides, with throughput fairness over
+time. Our flow rule is proportional-share taken *instantaneously* and *only over
+the runnable set*, with the bucket-stream reading that makes priority a rate and
+the schedule memoryless. Stride scheduling in particular carries per-task pass
+values (state that advances); our flow rule is stateless across the block/return
+boundary — a returning task carries no pass debt — which is the property that gives
+free return. The minimum-rate floor is our anti-starvation guarantee, analogous to
+a minimum-tickets allocation.
 
-**Novel adjacency — inversion dissolved by costly yield on a shared budget.** The
-literature fixes inversion by moving priority *to* the holder. We remove the
-inversion by having the blocked process spend its scheduling claim *away*, on a
-budget shared with the rest of the series' machinery, with a floor for
-anti-starvation and proportional share for redistribution. To our knowledge this
-direction — descend the blocker rather than ascend the holder, on one conserved
-budget — is novel; we pre-register it and invite refutation.
+**Novel adjacency — inversion as structurally absent under instantaneous rate
+share.** The literature removes inversion by transferring a blocked task's
+retained priority. We observe that if priority is a rate and share is divided only
+over the runnable set, a blocked task retains nothing to transfer and inversion
+cannot form. Combined with memorylessness (free return) and the rate floor (no
+starvation), this gives the classical guarantees with no inheritance subsystem. To
+our knowledge this framing is novel; we pre-register it and invite refutation.
 
 ---
 
 ## 6. Evaluation
 
-### 6.1 Toy: `iso_share.py` `(shown)`
+### 6.1 Toy: `iso_flow.py` `(shown)`
 
-Three processes share one lock S. L (the holder) holds S at t=0 and has a short
-critical section then releases. H does a unit of work, then requests S and blocks
-on L, then has more work. M is unrelated CPU work. One shared budget; each round
-distributes capacity as floor + proportional share; progress refills budget,
-blocked scheduling attempts cost `yield_cost` (a costly yield). **No wall-clock
-primitive is present.**
+Three processes share one lock S. L (rate 1) holds S, has a short critical section
+then releases. H (rate 9) does work, requests S and blocks on L, then more work. M
+(rate 3) is unrelated. Each instant the cake is divided over the runnable set by
+rate. **No wall-clock primitive is present.**
 
-Observed per-round dynamics (costly yield, floor on):
+The per-round instantaneous shares show every claim directly:
 
-| Phase | Rounds | What happens |
-|---|---|---|
-| Setup | 1–5 | H runs its first unit, then blocks on L; budgets near equal |
-| Self-removal | 6–12 | H's costly yields burn its budget below L's (round 6) down to 0 (round 12); L progresses every round, never stalls |
-| Release & speed-up | 13–17 | L finishes its critical section and releases S; freed share flows to L and M, which accelerate |
-| Drain finish | 18–25 | H, unblocked, refills budget and completes its remaining work |
+| Phase | Rounds | L share | H share | M share | What it shows |
+|---|---|---|---|---|---|
+| All present | 1–3 | 0.08 | 0.69 | 0.23 | H (rate 9) dominates by its rate; L and M get their proportions |
+| H blocked (away) | 4–11 | 0.25 | **0.00** | 0.75 | H leaves the table; L's share **rises 0.08→0.25**, M's to 0.75 — automatic rebalance |
+| Only L present | 12–13 | **1.00** | 0.00 | 0.00 | M done, H blocked: L gets the whole cake |
+| H returns | 14–18 | 0.10 | **0.90** | 0.00 | H back at full rate **immediately** — 0.90 = 9/(9+1) against L, no climb-back |
+| Finish | 19–21 | 1.00 | 0.00 | — | L completes its tail |
 
 Claims, all confirmed:
 
-- **H removes itself.** H's budget drops below L's at round 6 and reaches 0 by
-  round 12 — purely from costly yields, with no inheritance or external demotion.
-  `(shown)`
-- **L is never starved.** L's cumulative progress climbs steadily through the
-  entire blocked window and never stalls for a round; the floor is what guarantees
-  this. `(shown)`
-- **L speeds up proportionally.** L's per-round progress rate overtakes the
-  blocked H's during the blocked window, and L (with M) absorbs H's former share
-  once H drains. `(shown)`
-- **System completes.** All three finish. `(shown)`
+- **L's share rises automatically when H is away.** 0.08 → 0.25 the instant H
+  blocks, and 1.00 when L is the only one present. No demotion of H; the division
+  simply rebalanced over the runnable set. `(shown)`
+- **L is never starved.** L has a positive share every round of the blocked
+  window and never stalls. `(shown)`
+- **H eats immediately on return.** At round 14 H resumes at 0.90 — exactly its
+  uncontested rate proportion against L — with zero penalty for ten rounds
+  blocked. Memoryless: return is free. `(shown)`
+- **System completes**, all three finishing their work. `(shown)`
 
-### 6.2 Ablation: the floor is load-bearing `(shown)`
+### 6.2 Memorylessness check `(shown)`
 
-Re-run with `floor_frac = 0` (no floor; pure proportional share):
+H's share when it returns (round 14, against L only) is 0.900, exactly `9/(9+1)`,
+its uncontested rate proportion — identical to what its rate would earn had it
+never blocked. The block left no trace in the allocation. This is the operational
+meaning of memoryless and of "no climb-back, no debt." `(shown)`
 
-| Floor | Outcome | L during H's block |
-|---|---|---|
-| on (0.15) | **completed** | L progresses steadily, never stalls |
-| off (0.0) | **stuck** | L, outweighed, gets no share and starves; as holder, this stalls the system |
+### 6.3 Practical exam pointer
 
-The floor is the difference between completing and starving. Pure proportional
-share — share strictly proportional to budget with no minimum — lets the
-highest-budget process deny the holder any share, and a starved holder is a
-stalled system. The floor guarantees the weakest process the sliver it needs to
-keep moving. `(shown)`
-
-### 6.3 Honest limitation: costly-vs-free yield separation `(shown)`
-
-In the present scenario, comparing costly yield to a near-free yield does not
-cleanly separate L's progress during the block (both give L the same window
-progress), because the floor already rescues L and the scenario's budgets are
-small. The costly yield's distinctive effect — H *self-removing* by burning budget
-below L's — is clearly shown (§6.1), but a scenario that isolates costly-vs-free on
-a measurable outcome (e.g. total inversion exposure, or M's interference) is owed.
-We record this as a gap rather than overclaim the ablation. `(shown limitation)`
-
-### 6.4 Practical exam pointer
-
-In a real engine, "scheduled but blocked" is observable (a transaction waiting on
-a lock), and a costly yield maps to charging a transaction's scheduling budget
-when it is scheduled but cannot proceed, while a floor maps to a guaranteed
-minimum service rate per transaction. The claim to test: billing blocked
-scheduling attempts, plus a minimum-service floor, dissolves priority inversion
-without an inheritance subsystem, and never starves a lock holder. A failure there
-is the next seed.
+In a real engine, "at the table" is "runnable, not waiting on a lock," which is
+directly observable, and rate-proportional share is a standard scheduler class
+(e.g. weighted fair queuing / CFS-style weights). The claim to test: a runnable-set
+rate-proportional scheduler with a minimum-weight floor exhibits no priority
+inversion and requires no inheritance subsystem, and a transaction resuming from a
+lock wait regains its full weight immediately. A failure there is the next seed.
 
 ---
 
 ## 7. Further work (deeper into this wave)
 
-- **Isolate costly-vs-free yield.** §6.3's gap: design a scenario where costly
-  yield measurably beats free yield on an outcome the floor does not already
-  rescue (e.g. bounding M's total interference, or H's worst-case blocking).
-- **Tuning the three knobs.** `floor_frac`, `yield_cost`, and `refill` interact.
-  Characterize the region where the system completes, never starves, and H
-  self-removes promptly. Is there a principled setting (e.g. `yield_cost` a fixed
-  multiple of `refill`) that works across workloads, or does each workload retune?
-- **Quantitative blocking bound.** Classical inheritance has a proven worst-case
-  blocking bound. Does the costly-yield mechanism admit an analogous bound on how
-  long H waits, as a function of `yield_cost` and L's critical-section length?
-- **Budget = the one quantity.** The same budget detects deadlock at its floor,
-  banks as resolution credit, and here is spent on yielding to schedule. The
-  capstone question: are these literally one conserved quantity with three
-  readings, and does a scheduler that maintains only this budget get detection,
-  resolution, and inversion-freedom together with no added subsystem?
-- **Floor vs. fairness under chains.** A long chain of holders each protected by a
-  floor: does the floor sum to a meaningful service guarantee end-to-end, or can a
-  deep chain still under-serve the task at its root?
+- **Rate as the conserved budget.** This paper's rate, Paper 01's detection floor,
+  and Paper 02's resolution credit are all the one shared quantity. Capstone
+  question: is "rate" simply the *flow* and "budget/credit" the *accumulated
+  stock* of one conserved quantity, so that detection, resolution, and scheduling
+  are stock-and-flow readings of a single thing?
+- **Blocking bound under rate share.** Classical inheritance has a proven
+  worst-case blocking bound. Does rate-proportional share admit an analogous bound
+  on how long a high task waits, as a function of the holder's rate and
+  critical-section length? (A holder with a tiny rate could be slow to release even
+  with the whole cake; does the floor or a holder-rate boost matter here?)
+- **Holder-rate and chained waits.** When L is the only one present it gets the
+  whole cake, but if L's own rate is tiny and several tasks are present, L might
+  release slowly. Should a holder transiently inherit *rate* (a flow analogue of
+  inheritance) — and does that reintroduce a protocol, or fall out of the same
+  instantaneous division?
+- **Focus as the axis.** Axis 03 is focus: rate is how much focus a task commands.
+  Does varying a task's rate over its lifetime (rising focus as a deadline nears)
+  compose cleanly with the memoryless division, and does it stay isomorphic?
+- **Fairness vs. responsiveness.** Instantaneous division is maximally responsive
+  (return is free) but a very high-rate task can starve others down to the floor.
+  Characterize where the floor must sit to keep low-rate tasks usefully alive
+  without dulling the responsiveness that makes return free.
 
 ---
 
 ## 8. Conclusion
 
-Priority inversion has been fixed by lifting the holder: detect the block, raise
-the low task to the high task's priority, restore on release. We dissolved it from
-the other direction. Put scheduling and yielding on one shared budget and make the
-yield costly, and a high task that is blocked spends its own scheduling claim away
-— each fruitless yield burns budget — until it no longer dominates. No one is
-boosted; the blocked task steps aside by spending. A floor guarantees the low
-holder a sliver of progress every round, so it is never starved while the high
-task hyperfocuses; and because share is proportional to budget, the capacity the
-high task burns off flows to the holder, which speeds up as the blocker drains and
-faster still once it is gone. The toy shows each piece: the blocked task's budget
-falling below the holder's within a few rounds, the holder progressing without a
-single stall, and — when the floor is removed — the system starving into a
-standstill, proving the floor load-bearing.
+Priority inversion has been fixed by transferring a blocked task's retained
+priority to the holder, via a stateful inheritance protocol. We removed the need by
+changing what priority *is*. Priority is a flow rate: each task a bucket filled by
+a stream, and at every instant the processor is divided among the tasks at the
+table in proportion to their rates. A blocked task is simply not at the table — it
+holds no claim to invert — so the holder is served by construction and the
+inversion cannot form. The others' shares rise automatically to fill a departed
+task's place, and a returning task, its rate never having changed, resumes at full
+share immediately, with no penalty to repay and no priority to restore. The
+allocation at any instant depends only on who is present and their rates:
+memoryless, and therefore isomorphic — the same structure re-read each instant
+rather than a protocol accumulating boosts and debts.
 
-This is one mechanism, not a protocol: the same shared budget the series uses to
-detect deadlock at its floor and to bank resolution credit is here spent on
-yielding to schedule. Detection, resolution, and scheduling are three readings of
-one conserved quantity. The inversion never needed a special fix, because the
-budget never stranded the holder — the blocked task spent itself aside, the floor
-kept the holder alive, and proportional share sent the freed capacity to whoever
-could convert it. Hoarding the processor on a task that cannot use it is what
-strands the system; billing that task for the hoard, and guaranteeing the holder
-its floor, frees the whole. The generous schedule and the optimal schedule are the
-same schedule.
+The toy shows every piece directly in the instantaneous shares: the holder's slice
+rising from 0.08 to 0.25 to 1.00 as the high task leaves and the table empties, and
+the high task resuming at exactly 0.90 — its uncontested rate proportion — the
+instant it returns from ten rounds blocked, paying nothing. We set the rates, the
+focus, and the system self-organises: who eats how much is always just the
+proportion of present demand. This is the focus axis of the series, and it joins
+the others under one conserved quantity — the same stream that, accumulated, is the
+budget whose floor detects deadlock and whose banking is resolution credit.
+Hoarding a claim on the processor while unable to use it is the fiction the
+classical model must patch; letting the claim be a live rate, served only when one
+is at the table, frees the whole. The focused schedule and the fair schedule are
+the same schedule.
 
 ---
 
@@ -422,36 +395,28 @@ same schedule.
 
 ## Appendix A — Reproducibility
 
-- Artifact: `iso_share.py`, committed at `21dafc4` (Team Phi).
-- Run: `python3 iso_share.py` — prints the costly-yield run, the floor ablation
-  (on -> completed, off -> stuck), and a verdict ending in `ALL CLAIMS HELD: True`.
+- Artifact: `iso_flow.py`, committed at `dc6ae01` (Team Phi).
+- Run: `python3 iso_flow.py` — prints the per-round instantaneous shares, the
+  return-immediacy and memorylessness checks, and a verdict ending in
+  `ALL CLAIMS HELD: True`.
 - No-timer audit: `grep -niE "time|sleep|clock|timeout|perf_counter|monotonic"
-  iso_share.py` returns only prose in comments; no wall-clock primitive is called.
-- Determinism: fixed capacity per round, scripted programs, no RNG — traces
+  iso_flow.py` returns only prose in comments; no wall-clock primitive is called.
+- Determinism: fixed capacity per instant, scripted programs, no RNG — traces
   reproduce exactly.
 
 ## Appendix B — The scheduler in one screen
 
 ```
-each round:                              # one shared budget per process
-    alive = processes not done
-    sum_b = sum(budget[p] for p in alive)
-    for p in alive:
-        share[p] = floor_frac*C/n + (1-floor_frac)*C*budget[p]/sum_b
-        credit_acc[p] += share[p]        # floor guarantees a sliver to everyone
+each instant:                            # priority = rate; no stock, no memory
+    T = { p : alive, not done, runnable now (next step not a blocked acquire) }
+    R = sum( rate(p) for p in T )
+    for p in T:
+        share(p) = C * rate(p) / R       # instantaneous proportion of present demand
+        acc(p)  += share(p)
+        while acc(p) >= 1: acc(p) -= 1; do one step of p
 
-    for p in alive:
-        while credit_acc[p] >= 1:
-            credit_acc[p] -= 1
-            if blocked(p):
-                budget[p] -= yield_cost   # COSTLY YIELD: blocked p spends down
-                break
-            else:
-                do one step of p
-                budget[p] += refill       # progress earns budget (refill < yield_cost)
-
-# A blocked high-budget process is scheduled often, yields often, and burns its
-# budget below the holder's -> it self-removes, no inheritance. The floor keeps
-# the holder progressing (no starvation); proportional share routes freed
-# capacity to whoever can convert it. No clock.
+# A blocked task is not in T -> it holds no share -> it cannot strand the holder
+# -> inversion cannot form. When it leaves, R shrinks and everyone present rises.
+# When it returns, R grows and it resumes at full rate share at once -- no debt,
+# no restore. The allocation depends only on (T, rates): memoryless. No clock.
 ```
