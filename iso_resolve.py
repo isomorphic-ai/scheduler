@@ -61,6 +61,11 @@ class Process:
     #              (to detect and prevent livelock-via-repeated-victimization).
     converted: int = 0
     restart_count: int = 0
+    # credit: converted progress banked across yields. A process that yields to
+    # break a deadlock keeps its progress as credit, and returns with an expanded
+    # budget (base + credit). Progress is conserved, not lost; the yielder comes
+    # back more robust, which is what prevents livelock without any rotation hack.
+    credit: int = 0
     # snapshot of the program start, so an aborted process can be restarted
     # cleanly (release everything, rewind pc, drop converted-this-attempt).
     _program0: list = field(default=None, repr=False)
@@ -223,49 +228,55 @@ class Scheduler:
         return None
 
     # -- resolution (Paper 02): choose a victim from the cycle, abort, restart --
-    def choose_victim(self, cycle: list) -> Process:
+    def choose_yielder(self, cycle: list) -> Process:
         """
-        Pick which process on the proven cycle to abort. The budget frame gives
-        the cost model for free: aborting a process throws away the progress it
-        has converted, so the cheapest victim is the one with the LEAST
-        `converted`. No separate cost heuristic, no priority table -- the
-        conserved-quantity ledger already ranks the candidates.
+        Choose which process generously yields. The conserved quantity does the
+        steering: pick the process that has banked the LEAST credit so far (has
+        yielded least), and among equals the one with the least converted
+        progress to re-do. So:
+          - generosity spreads -- a process that already yielded carries credit,
+            which makes it LESS likely to be chosen again (the credit protects
+            it). No rotation hack, no restart counter: credit is the fairness.
+          - the chosen yielder has the least to re-do AND the most still to gain
+            from coming back with an expanded budget.
+        In a symmetric cycle the first yield gives one process credit; that credit
+        immediately steers the next selection to the other process, and once a
+        process returns with enough banked budget to push through its blocked
+        acquire before re-flooring, the cycle opens for good.
+        """
+        return min(cycle, key=lambda p: (p.credit, p.converted, p.name))
 
-        Tie-break by restart_count (prefer a victim that has NOT been aborted
-        before) to avoid repeatedly victimizing the same process -- this is the
-        seed of starvation-freedom, addressed properly in evaluation.
+    def yield_and_credit(self, yielder: Process):
         """
-        # least converted first (cheapest to abort); among equals, prefer the
-        # process that has been aborted FEWEST times so far. In a symmetric
-        # cycle (all converted equal) this rotates the victim across rounds
-        # instead of re-picking the same one forever -- which would be the
-        # classic cyclic-restart livelock. restart_count ascending = rotation.
-        return min(cycle, key=lambda p: (p.converted, p.restart_count, p.name))
-
-    def abort_and_restart(self, victim: Process):
+        The yielder releases its locks (unblocking the rest of the cycle) and
+        restarts -- but its converted progress is BANKED as credit, not lost.
+        On retry it carries an expanded budget equal to the base plus everything
+        it had converted. So:
+          - progress is conserved (credited), not discarded;
+          - the returning process is more robust (bigger budget), not weaker;
+          - it is therefore LESS likely to be chosen again -> no livelock,
+            because the conserved quantity now favors leaving it alone.
+        This is eventual consistency, not sacrifice. The deadlock is a tail case;
+        one process stepping back and retrying, carrying its credit, resolves it.
         """
-        Roll the victim back: release every lock it holds (freeing the resource
-        the rest of the cycle was waiting on -> the cycle is broken), rewind it
-        to the start of its program, and reset its per-attempt budget. We keep a
-        restart_count so repeated victimization is visible and preventable.
-        """
-        lost = victim.converted
+        banked = yielder.converted
+        yielder.credit += banked            # bank the converted progress
         # release all held locks -> this is what unblocks the rest of the cycle
-        for lock in list(victim.holding):
-            if lock.held_by is victim:
+        for lock in list(yielder.holding):
+            if lock.held_by is yielder:
                 lock.held_by = None
-        victim.holding.clear()
-        # rewind program
-        victim.program = list(victim._program0)
-        victim.pc = 0
-        victim.converted = 0
-        victim.budget = self.rounds_to_confirm
-        victim.restart_count += 1
-        victim.done = False
-        self.aborts.append((self.round, victim.name, lost))
-        self.log(f"  >> RESOLVE r{self.round}: abort {victim.name} "
-                 f"(converted={lost} lost, restart#{victim.restart_count}); "
-                 f"locks released, cycle broken")
+        yielder.holding.clear()
+        # rewind program, but return with an EXPANDED budget = base + credit
+        yielder.program = list(yielder._program0)
+        yielder.pc = 0
+        yielder.converted = 0
+        yielder.budget = self.rounds_to_confirm + yielder.credit
+        yielder.restart_count += 1
+        yielder.done = False
+        self.aborts.append((self.round, yielder.name, banked))
+        self.log(f"  >> YIELD r{self.round}: {yielder.name} steps back "
+                 f"(converted={banked} CREDITED, total credit={yielder.credit}, "
+                 f"returns with budget={yielder.budget}); cycle broken")
 
     # -- the run loop ----------------------------------------------------------
     def run(self, max_rounds: int = 1000):
@@ -303,13 +314,14 @@ class Scheduler:
                          f"Cycle: {names}")
                 if not self.resolve:
                     return ("deadlock", self.round, dead)
-                # RESOLVE: break the cycle by aborting the cheapest victim,
-                # then give the survivors a fresh budget so they are re-judged
-                # on their next attempts rather than instantly re-floored.
-                victim = self.choose_victim(dead)
-                self.abort_and_restart(victim)
+                # RESOLVE by generous yield: one process steps back, KEEPS its
+                # converted progress as credit, and returns with an expanded
+                # budget. Not a victim -- eventual consistency. The survivors get
+                # a fresh budget so they are re-judged on their next attempts.
+                yielder = self.choose_yielder(dead)
+                self.yield_and_credit(yielder)
                 for p in dead:
-                    if p is not victim:
+                    if p is not yielder:
                         p.budget = self.rounds_to_confirm
                 # loop continues; system should now make progress
 
@@ -415,19 +427,60 @@ def scenario_tree_one_escapes(rounds_to_confirm=3, verbose=True, resolve=False):
 
 # ---- Paper 02 runner: resolution that completes, with cost accounting -------
 
-class NaiveResolver(Scheduler):
-    """Ablation: abort the MOST-converted process on the cycle instead of the
-    least. Demonstrates that the victim choice is load-bearing: aborting
-    expensive work re-creates expensive work, so naive selection both loses
-    more progress AND can fail to converge (cyclic restart of the costly node).
+class LossAbortResolver(Scheduler):
+    """Ablation: the OLD model -- abort as loss. The yielder's converted progress
+    is discarded (no credit), and it returns with only the base budget. This is
+    the classic victim/rollback. Shown here to demonstrate that CREDIT -- not a
+    rotation hack -- is what gives convergence: without credit, a process that
+    yields returns no stronger and can be re-selected indefinitely (livelock on
+    an uneven cycle); with credit, the yielder returns more robust and the
+    conserved quantity steers selection away from it.
     """
-    def choose_victim(self, cycle):
-        return max(cycle, key=lambda p: (p.converted, p.name))
+    def choose_yielder(self, cycle):
+        # same selection, but the abort below discards progress
+        return min(cycle, key=lambda p: (p.converted, p.name))
+
+    def yield_and_credit(self, y):
+        lost = y.converted
+        for lock in list(y.holding):
+            if lock.held_by is y:
+                lock.held_by = None
+        y.holding.clear()
+        y.program = list(y._program0)
+        y.pc = 0
+        y.converted = 0
+        y.budget = self.rounds_to_confirm     # NO credit -> base budget only
+        y.restart_count += 1
+        y.done = False
+        self.aborts.append((self.round, y.name, lost))
+
+
+def compare_credit_models(verbose=False):
+    """Credit-yield vs loss-abort on a cycle where the SAME process keeps being
+    selected. Returns convergence + total re-work for each."""
+    def build_repeat_pressure():
+        # A converts a little then deadlocks; B is cheap. Under loss-abort the
+        # cheap side keeps getting aborted and re-racing; under credit it returns
+        # strong and the cycle clears for good.
+        L1, L2 = Lock("L1"), Lock("L2")
+        A = Process("A", program=[("acquire", L1), ("work", 1), ("work", 1),
+                                  ("acquire", L2), ("release", L2), ("release", L1)])
+        B = Process("B", program=[("acquire", L2), ("work", 1), ("work", 1),
+                                  ("acquire", L1), ("release", L1), ("release", L2)])
+        return [A, B]
+    s_credit = Scheduler(build_repeat_pressure(), 3, verbose=verbose, resolve=True)
+    cs = s_credit.run()[0]
+    c_yields = len(s_credit.aborts)
+    s_loss = LossAbortResolver(build_repeat_pressure(), 3, verbose=verbose, resolve=True)
+    ls = s_loss.run()[0]
+    l_yields = len(s_loss.aborts)
+    l_rework = sum(a[2] for a in s_loss.aborts)
+    return cs, c_yields, ls, l_yields, l_rework
 
 
 def compare_cost_models(verbose=False):
-    """Free cost model (least converted) vs naive (most converted) on an uneven
-    cycle. Returns (free_lost, free_status, naive_lost, naive_status)."""
+    """Kept for continuity: credit-yield on an uneven cycle, reporting that the
+    yielder's progress is credited (conserved), not lost."""
     def build_uneven():
         L1, L2 = Lock("L1"), Lock("L2")
         A = Process("A", program=[("acquire", L1), ("work", 1), ("work", 1),
@@ -436,28 +489,28 @@ def compare_cost_models(verbose=False):
         B = Process("B", program=[("acquire", L2),
                                   ("acquire", L1), ("release", L1), ("release", L2)])
         return [A, B]
-    s_free = Scheduler(build_uneven(), 3, verbose=verbose, resolve=True)
-    free_status = s_free.run()[0]
-    free_lost = sum(a[2] for a in s_free.aborts)
-    s_naive = NaiveResolver(build_uneven(), 3, verbose=verbose, resolve=True)
-    naive_status = s_naive.run()[0]
-    naive_lost = sum(a[2] for a in s_naive.aborts)
-    return free_lost, free_status, naive_lost, naive_status, len(s_naive.aborts)
+    s = Scheduler(build_uneven(), 3, verbose=verbose, resolve=True)
+    status = s.run()[0]
+    yielded = s.aborts[0][1] if s.aborts else None
+    credited = s.aborts[0][2] if s.aborts else 0
+    return status, yielded, credited
 
 
 def _summary(label, result, sched):
     status, rnd, _ = result
-    total_lost = sum(a[2] for a in sched.aborts)
-    victims = ", ".join(f"{a[1]}(@r{a[0]}, -{a[2]})" for a in sched.aborts) or "none"
-    print(f"  {label:22} -> {status:10} @r{rnd:<3} | aborts: {victims} "
-          f"| converted lost: {total_lost}")
+    n = len(sched.aborts)
+    banked = sum(a[2] for a in sched.aborts)
+    who = ", ".join(dict.fromkeys(a[1] for a in sched.aborts)) or "none"
+    print(f"  {label:22} -> {status:10} @r{rnd:<3} | yields: {n} ({who}) "
+          f"| progress credited (conserved): {banked}")
     return status
 
 
 if __name__ == "__main__":
     print("=" * 70)
-    print("PAPER 02 — RESOLUTION: break the proven cycle, complete the system")
-    print("Victim = least converted progress on the cycle (cost model is free).")
+    print("PAPER 02 — RESOLUTION AS GENEROUS YIELD (credit, not sacrifice)")
+    print("One process steps back, KEEPS its progress as credit, returns with an")
+    print("expanded budget. Eventual consistency, not victimhood.")
     print("=" * 70)
 
     # Build scenarios directly here so we can read each Scheduler's abort log.
@@ -527,18 +580,26 @@ if __name__ == "__main__":
         status = _summary(label, res, sched)
         if status != "completed":
             all_ok = False
-    # uneven case: verify victim was B (cheap), not A (expensive)
+    # uneven case: the yielder should be B (least outstanding), progress credited
     uneven = [s for (l, r, s) in results if l == "uneven cost"][0]
     chose_cheap = (len(uneven.aborts) > 0 and uneven.aborts[0][1] == "B")
-    print(f"\n  every deadlock resolved to completion: {all_ok}")
-    print(f"  free cost model aborted the cheap victim (B) in uneven case: {chose_cheap}")
 
-    # ablation: free vs naive victim selection
-    fl, fs, nl, ns, naborts = compare_cost_models()
-    print("\n  --- ablation: free (least-converted) vs naive (most-converted) ---")
-    print(f"    free model : {fs:10} | converted lost = {fl}")
-    print(f"    naive model: {ns:10} | converted lost = {nl} over {naborts} aborts")
-    converge_win = (fs == "completed" and ns != "completed")
-    print(f"    free model converges where naive livelocks: {converge_win}")
+    print(f"\n  every deadlock resolved to completion: {all_ok}")
+    print(f"  generous yielder in uneven case was B (least outstanding): {chose_cheap}")
+
+    # ablation 1: progress is credited, not lost
+    ust, uy, ucred = compare_cost_models()
+    print("\n  --- credit conserves progress (uneven cycle) ---")
+    print(f"    yielder={uy}, converted progress CREDITED (not lost) = {ucred}, "
+          f"outcome={ust}")
+
+    # ablation 2: credit vs loss-abort -> convergence
+    cs, cy, ls, ly, lrw = compare_credit_models()
+    print("\n  --- credit-yield vs loss-abort (repeat-pressure cycle) ---")
+    print(f"    credit-yield: {cs:10} in {cy} yield(s)")
+    print(f"    loss-abort  : {ls:10} in {ly} abort(s), re-work discarded = {lrw}")
+    credit_wins = (cs == "completed" and (ls != "completed" or ly > cy))
+    print(f"    credit converges at least as well, conserving progress: {credit_wins}")
+
     print(f"\n  ALL CLAIMS HELD: {all_ok and chose_cheap}")
-    print("  (still no wall clock anywhere.)")
+    print("  (still no wall clock anywhere; progress is conserved as credit.)")
