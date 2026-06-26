@@ -3,7 +3,7 @@
 **Series:** The Isomorphic Scheduler
 **Authors:** Fabian Franz & Claude (Team Phi / Isomorphic AI)
 **Status:** draft v1 · toy validated · practical exam pre-registered
-**Artifact:** `iso_deadlock.py` @ commit `090b4b0`
+**Artifact:** `iso_deadlock.py` @ commit `fff1805`
 
 > **TruthSeed (paper):** `iso-sched-01:budget-not-timer`
 > Deadlock can be *known*, not guessed, in a system whose scheduler routes a
@@ -475,7 +475,7 @@ moral, if one wants it, is available by isomorphism — and is left to the reade
 
 ## Appendix A — Reproducibility
 
-- Artifact: `iso_deadlock.py`, committed at `090b4b0` (Team Phi).
+- Artifact: `iso_deadlock.py`, committed at `fff1805` (Team Phi).
 - Run: `python3 iso_deadlock.py` — prints all three scenario traces and a
   verdict line `ALL CLAIMS HELD: True`.
 - No-timer audit: `grep -niE "time|sleep|clock|timeout|perf_counter|monotonic"
