@@ -415,6 +415,36 @@ def scenario_tree_one_escapes(rounds_to_confirm=3, verbose=True, resolve=False):
 
 # ---- Paper 02 runner: resolution that completes, with cost accounting -------
 
+class NaiveResolver(Scheduler):
+    """Ablation: abort the MOST-converted process on the cycle instead of the
+    least. Demonstrates that the victim choice is load-bearing: aborting
+    expensive work re-creates expensive work, so naive selection both loses
+    more progress AND can fail to converge (cyclic restart of the costly node).
+    """
+    def choose_victim(self, cycle):
+        return max(cycle, key=lambda p: (p.converted, p.name))
+
+
+def compare_cost_models(verbose=False):
+    """Free cost model (least converted) vs naive (most converted) on an uneven
+    cycle. Returns (free_lost, free_status, naive_lost, naive_status)."""
+    def build_uneven():
+        L1, L2 = Lock("L1"), Lock("L2")
+        A = Process("A", program=[("acquire", L1), ("work", 1), ("work", 1),
+                                  ("work", 1), ("work", 1), ("work", 1),
+                                  ("acquire", L2), ("release", L2), ("release", L1)])
+        B = Process("B", program=[("acquire", L2),
+                                  ("acquire", L1), ("release", L1), ("release", L2)])
+        return [A, B]
+    s_free = Scheduler(build_uneven(), 3, verbose=verbose, resolve=True)
+    free_status = s_free.run()[0]
+    free_lost = sum(a[2] for a in s_free.aborts)
+    s_naive = NaiveResolver(build_uneven(), 3, verbose=verbose, resolve=True)
+    naive_status = s_naive.run()[0]
+    naive_lost = sum(a[2] for a in s_naive.aborts)
+    return free_lost, free_status, naive_lost, naive_status, len(s_naive.aborts)
+
+
 def _summary(label, result, sched):
     status, rnd, _ = result
     total_lost = sum(a[2] for a in sched.aborts)
@@ -502,5 +532,13 @@ if __name__ == "__main__":
     chose_cheap = (len(uneven.aborts) > 0 and uneven.aborts[0][1] == "B")
     print(f"\n  every deadlock resolved to completion: {all_ok}")
     print(f"  free cost model aborted the cheap victim (B) in uneven case: {chose_cheap}")
-    print(f"  ALL CLAIMS HELD: {all_ok and chose_cheap}")
+
+    # ablation: free vs naive victim selection
+    fl, fs, nl, ns, naborts = compare_cost_models()
+    print("\n  --- ablation: free (least-converted) vs naive (most-converted) ---")
+    print(f"    free model : {fs:10} | converted lost = {fl}")
+    print(f"    naive model: {ns:10} | converted lost = {nl} over {naborts} aborts")
+    converge_win = (fs == "completed" and ns != "completed")
+    print(f"    free model converges where naive livelocks: {converge_win}")
+    print(f"\n  ALL CLAIMS HELD: {all_ok and chose_cheap}")
     print("  (still no wall clock anywhere.)")
