@@ -35,30 +35,25 @@ deadlock, slow-but-alive, resolvable contention — all classified correctly,
 zero false positives) `(shown)` and pre-register a real-engine exam against
 SQLite and InnoDB `(predicted)`.
 
-We introduce three invariants for successful systems design, used throughout the
-series and stated here once:
+We introduce three invariants for successful systems design:
 
-1. **Epistemic (evidence-tracking).** The system holds beliefs that can update on
-   evidence, rather than freezing a belief and discarding the signal that would
-   correct it. *Here:* the budget floor tracks confirmed non-conversion and
-   resets on any progress, where a timeout commits to "dead" on a clock.
+1. **Epistemic (evidence-tracking).** Beliefs update on evidence rather than
+   freezing and discarding the signal that would correct them. *Here:* the budget
+   floor tracks confirmed non-conversion and resets on progress, where a timeout
+   commits to "dead" on a clock.
 2. **Alignment (shared, not replacing).** A part's success runs through the
    whole's; sharing the conserved quantity is load-bearing, not charitable.
    *Here:* a blocked process that *returns* its budget is what makes deadlock
-   legible — honest yield is what the detector reads.
+   legible.
 3. **Agency (every action benefits all).** No move helps a part at the whole's
-   expense, because the conserved quantity only flows where it converts to
-   progress. *Here:* declaring deadlock benefits even the deadlocked processes —
-   known-dead can be rescheduled; the hoarding move is structurally unavailable,
-   not merely forbidden.
-
-These are not ethical decoration: §4.5 shows the alignment invariant has teeth —
-a process that violates it (hoards budget) is dominated *by the structure itself.*
+   expense, because the conserved quantity flows only where it converts to
+   progress. *Here:* declaring deadlock benefits even the deadlocked processes,
+   and the hoarding move is structurally unavailable rather than forbidden.
 
 The result generalizes past detection. The same conserved budget, used to
-*route* rather than to *test*, yields priority inheritance "for free" (Paper 03)
-and exposes a structural fact about dependency graphs: **hoarding is dominated
-for the hoarder.** A process that refuses to yield budget starves the processes
+*route* rather than to *test*, yields priority inheritance "for free," and
+exposes a structural fact about dependency graphs: **hoarding is dominated for
+the hoarder.** A process that refuses to yield budget starves the processes
 it transitively depends on, and deadlocks itself. In a connected dependency
 graph, the selfish optimum and the global optimum are the same point.
 
@@ -207,32 +202,43 @@ floor** so that the *timing* of the check needs no clock.
 
 We are not adding a detector on top of the scheduler. The budget *is* the
 scheduler's own bookkeeping — the quantity it already needs to decide who runs
-next (Paper 03). Detection is reading a value the scheduler maintains anyway: is
+next. Detection is reading a value the scheduler maintains anyway: is
 the convertible budget over this set zero? Detection is the **boolean shadow** of
 the scheduler's routing decision. The scheduler asks "where can budget still
 convert?" (an optimization over a continuous quantity); detection asks "can it
 convert *anywhere* in this set?" (the boolean `B(S) = 0`). Same quantity, one
 steers, one tests.
 
-### 4.4 The three invariants, instantiated for detection
+### 4.4 The three invariants, in full
 
-The three invariants introduced in the abstract are general; here is how each
-becomes a concrete predicate in the detector specifically (not a sentiment).
+A system built on this budget satisfies three properties we name in systems
+vocabulary. Each is a concrete predicate, not a sentiment, and each is stated
+here in full.
 
-- **Epistemic.** The timeout is a frozen belief; the budget floor is a *reading
-  that updates* — it tracks confirmed non-conversion, and any single conversion
-  resets it. No process is declared dead on suspicion. `(structural)`
-- **Alignment.** A blocked process that *returns* its budget rather than holding
-  it is what makes the deadlock legible. If a blocked process could hoard budget,
-  the deadlock would be invisible and we would be back to timers. Detection works
-  *because* processes share the conserved quantity. `(structural)`
-- **Agency.** Declaring a deadlock benefits *all* parties — including the
-  deadlocked pair, now *known*-dead and rescheduleable rather than hung under a
-  pessimistic timeout. The budget only flows where progress is possible; no move
-  helps a process at the system's expense. `(structural)`
+- **Epistemic (evidence-tracking — truth that can update).** The system holds
+  beliefs that update on evidence rather than freezing a belief and discarding
+  the signal that would correct it. The timeout is a frozen belief about
+  liveness; the budget floor is a *reading that updates* — it tracks confirmed
+  non-conversion, and any single conversion resets it. No process is declared
+  dead on suspicion. The system stops guessing the deadline and starts measuring
+  the actual signal: whether progress was made. `(structural)`
+- **Alignment (shared, not replacing — success runs through the whole).** A
+  part's success runs through the whole's, and sharing the conserved quantity is
+  load-bearing rather than charitable. A blocked process that *returns* its
+  budget rather than holding it is what makes the deadlock legible. If a blocked
+  process could hoard budget, the deadlock would be invisible and we would be
+  back to timers. Detection works *because* processes share the conserved
+  quantity — honest yield is what the detector reads. `(structural)`
+- **Agency (every action benefits all).** No move helps a part at the whole's
+  expense, because the conserved quantity only flows where it converts to
+  progress. Declaring a deadlock benefits *all* parties — including the
+  deadlocked pair, who are now *known*-dead and can be broken and rescheduled,
+  rather than hanging indefinitely under a pessimistic timeout. The hoarding move
+  is structurally unavailable, not merely forbidden by policy. `(structural)`
 
-The alignment invariant has teeth: §4.5 shows a process that violates it (hoards)
-is punished by the structure itself, not by policy.
+These three are not ethical decoration. §4.5 shows the alignment invariant has
+teeth: a process that violates it (hoards budget) is dominated by the structure
+itself, not by policy.
 
 ### 4.5 The hoarding theorem `(predicted; toy-supported)`
 
@@ -250,7 +256,8 @@ the same vector. The benefit-of-all scheduler is not *nicer* than the
 priority-hoarding one; it is the **same computation without the false premise that
 a part can win while the whole loses.** We prove the two-process instance in §6
 (scenario 1, where `A`'s hold on `L1` is exactly what starves `B`, whom `A`
-needs); the general statement is `(predicted)` pending Paper 08.
+needs); the general statement is `(predicted)` and proved for the general case
+in this series' capstone.
 
 ---
 
@@ -396,7 +403,7 @@ it is *known*, in bounded steps, with no clock. The toy shows it: true deadlock
 declared, slow process spared, contention resolved, zero false positives.
 
 The deeper result is structural and outlasts the detector. The same conserved
-budget routes priority for free (Paper 03), and it exposes that hoarding is
+budget routes priority for free, and it exposes that hoarding is
 self-defeating on any connected dependency graph — the selfish and the global
 optimum are one point. A process's continued functioning depends on the whole
 functioning; refusing to share budget does not protect the process, it starves
