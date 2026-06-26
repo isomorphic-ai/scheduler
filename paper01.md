@@ -310,13 +310,16 @@ attempt. **There is no wall-clock primitive in the file** — `grep -niE
 "time|sleep|clock|timeout|perf_counter|monotonic"` returns only prose in
 comments. Detection latency is `rounds_to_confirm` (here, 3).
 
-Three scenarios, three required verdicts:
+Six scenarios, six required verdicts:
 
 | Scenario | Construction | Required | Result |
 |---|---|---|---|
-| 1. True deadlock | AB-BA: `A` holds L1 wants L2; `B` holds L2 wants L1 | declare deadlock | **deadlock @ round 5** |
+| 1. True deadlock (2-cycle) | AB-BA: `A` holds L1 wants L2; `B` holds L2 wants L1 | declare deadlock | **deadlock @ round 5** |
 | 2. Slow-but-alive | one process does 15 units of pure work, never blocks | complete, no flag | **completed @ round 16** |
 | 3. Resolvable contention | both want L1 in an order that resolves | complete, no flag | **completed @ round 6** |
+| 4. N-process cycle (3) | `A→B→C→A` over locks L1,L2,L3 | declare deadlock, find the 3-cycle | **deadlock @ round 5, cycle A→B→C→A** |
+| 5. Knot | 3-cycle `A→B→C→A` plus `D` holding L4, blocked waiting *into* L1 (held by A) | declare deadlock, localize to A,B,C; D doomed but off-cycle | **deadlock @ round 5, cycle = {A,B,C}, D floored but excluded** |
+| 6. Contention tree, live root | three processes contend on L1 behind a live root | complete, no flag | **completed @ round 8** |
 
 The traces show the mechanism, not a coincidence:
 
@@ -335,8 +338,43 @@ The traces show the mechanism, not a coincidence:
   without a closed cycle, so no false alarm — the cycle condition (§4.2 part 2)
   earning its place.
 
-**Verdict:** all three required outcomes met; zero false positives; detection
-latency = budget size, no wall clock. `(shown)`
+The first three scenarios establish the mechanism on a 2-cycle. The next three
+test whether the predicate survives the cases that break naive detectors:
+N-process cycles, knots, and the N>2 false-positive trap.
+
+- **Scenario 4 (N-process cycle).** Three processes `A→B→C→A` over three locks.
+  Rounds 1–2: all three *spend* (acquire first lock, work), budgets at 3. Rounds
+  3–5: all three *return* in lockstep, 3→2→1→0. At round 5 all are floored and
+  the DFS cycle-search recovers the full `A→B→C→A`. The 2-cycle was not special;
+  the budget floor descends identically regardless of cycle length, because the
+  conservation law (§4.1) is per-process and the cycle search (§4.2) is
+  length-agnostic. `(shown)`
+- **Scenario 5 (knot).** The case Gemini asked for. A 3-cycle `A→B→C→A`, plus a
+  fourth process `D` that holds its own lock L4, does work, then blocks waiting
+  *into* the cycle (it wants L1, held by `A`, released never). At round 5 **all
+  four** processes are at the floor — `D` included, because `D` genuinely cannot
+  progress. But the detector returns the cycle as **exactly {A, B, C}**, not the
+  smeared set of four. This is the localization result: the **budget floor
+  identifies who is stuck (all four); the cycle search identifies who is the
+  cause (the three on the cycle).** `D` is a casualty waiting into the knot, not
+  part of it. A detector that equated "floored" with "deadlocked" would wrongly
+  group `D` into the cycle; separating the floor (liveness signal) from the cycle
+  (permanence/causation signal) is exactly what keeps the diagnosis precise. This
+  matters for resolution: you break the cycle by aborting one of {A,B,C}, and `D`
+  then proceeds on its own — aborting `D` would resolve nothing. `(shown)`
+- **Scenario 6 (contention tree, live root).** The N>2 false-positive trap.
+  Three processes contend on one lock behind a live root. Budgets drain — `C`'s
+  budget even passes the floor to −1 — but the live root keeps releasing, so no
+  cycle ever closes and all three complete. **Many floored processes do not make
+  a deadlock without a closed cycle.** Note budget going negative is harmless:
+  the floor is a *threshold for candidacy*, and declaration is gated by the
+  *cycle*, not by how far below zero a budget has fallen. A starved-but-rescuable
+  process simply sits at-or-below the floor until its external holder releases.
+  `(shown)`
+
+**Verdict:** all six required outcomes met; zero false positives across 2-cycle,
+3-cycle, knot, and two contention cases; the knot correctly localized to its
+minimal cycle; detection latency = budget size, no wall clock. `(shown)`
 
 ### 6.2 Practical exam (real lock manager) `(predicted)`
 
@@ -372,9 +410,11 @@ resolution and routing:
 - **Probabilistic budget.** Replace the integer floor with `N_eff`-style evidence
   counting: how many *independent* confirmations of non-conversion before
   declaration? Connects to the honesty series' `N_eff` invariant directly.
-- **Partial cycles / knots.** Real wait-for graphs deadlock on *knots*, not just
-  simple cycles. Does the budget floor localize the knot as cleanly as it
-  localizes a 2-cycle?
+- **Knot localization under churn.** §6 shows the detector localizes a static
+  knot to its minimal cycle while correctly flagging off-cycle casualties as
+  doomed-but-excluded. Open: does localization stay stable when the knot *grows*
+  mid-detection — new processes waiting into it round by round — or can a late
+  arrival transiently mislabel the minimal cycle?
 - **Budget size vs. false-positive/latency tradeoff curve.** `rounds_to_confirm`
   is the one knob left. Characterize the curve: larger budget = later detection,
   but does it ever *re*-introduce false positives? (Conjecture: no — a deadlocked

@@ -113,7 +113,7 @@ class Scheduler:
 
         raise ValueError(f"unknown step {step}")
 
-    # -- who is process p waiting on right now? (for cycle detection) ----------
+    # -- who is process p waiting on right now? (single-successor, legacy) -----
     def waiting_on(self, p: Process) -> Optional[Process]:
         step = p.next_step()
         if step is None or step[0] != "acquire":
@@ -122,6 +122,23 @@ class Scheduler:
         if lock.held_by is not None and lock.held_by is not p:
             return lock.held_by
         return None
+
+    # -- all holders p is currently blocked on (for knot/N-cycle detection) ----
+    def waiting_on_all(self, p: Process) -> list:
+        # In this scripted model a process blocks on its single next `acquire`,
+        # so this returns 0 or 1 holders. Written as a list so the detector's
+        # graph search is correct for the general case (a process blocked on
+        # several locks at once, or a lock held in shared mode by many) without
+        # changing the detector. N-process cycles and knots are built here as
+        # chains of single-lock waits whose edges close into a tangle.
+        out = []
+        step = p.next_step()
+        if step is None or step[0] != "acquire":
+            return out
+        lock = step[1]
+        if lock.held_by is not None and lock.held_by is not p:
+            out.append(lock.held_by)
+        return out
 
     # -- the detector: budget floor + closed wait-cycle ------------------------
     def detect_deadlock(self) -> Optional[list[Process]]:
@@ -132,19 +149,57 @@ class Scheduler:
         if not starved:
             return None
 
-        # Now confirm the *permanence*: a closed wait-cycle among starved procs.
+        # Confirm permanence: a directed cycle within the starved set's
+        # wait-for graph. We do a proper DFS cycle search (not a single-path
+        # walk) so that N-process cycles and KNOTS -- where the cycle is
+        # embedded in a larger tangle of wait-edges -- are found, not just
+        # simple 2-cycles. A process in a knot may have its cycle reachable
+        # only after passing through other starved nodes; DFS finds it.
         starved_set = set(starved)
-        for start in starved:
-            # walk the wait chain; a cycle staying inside starved_set = deadlock
-            seen = []
-            cur = start
-            while cur is not None and cur in starved_set and cur not in seen:
-                seen.append(cur)
-                cur = self.waiting_on(cur)
-            if cur is not None and cur in seen:
-                # found a cycle; return it from the point of closure
-                idx = seen.index(cur)
-                return seen[idx:]
+
+        # build wait-for edges restricted to the starved set
+        edges: dict = {p: [] for p in starved}
+        for p in starved:
+            for q in self.waiting_on_all(p):
+                if q in starved_set:
+                    edges[p].append(q)
+
+        # iterative DFS with colors to extract an actual cycle path
+        WHITE, GRAY, BLACK = 0, 1, 2
+        color = {p: WHITE for p in starved}
+        parent: dict = {p: None for p in starved}
+
+        def extract_cycle(back_to, frm):
+            # reconstruct cycle from `frm` up to `back_to` via parent links
+            path = [frm]
+            cur = frm
+            while cur is not back_to and parent[cur] is not None:
+                cur = parent[cur]
+                path.append(cur)
+            path.reverse()
+            return path
+
+        for root in starved:
+            if color[root] != WHITE:
+                continue
+            stack = [(root, iter(edges[root]))]
+            color[root] = GRAY
+            while stack:
+                node, it = stack[-1]
+                advanced = False
+                for nxt in it:
+                    if color[nxt] == GRAY:
+                        # found a back-edge -> cycle
+                        return extract_cycle(nxt, node)
+                    if color[nxt] == WHITE:
+                        color[nxt] = GRAY
+                        parent[nxt] = node
+                        stack.append((nxt, iter(edges[nxt])))
+                        advanced = True
+                        break
+                if not advanced:
+                    color[node] = BLACK
+                    stack.pop()
         return None
 
     # -- the run loop ----------------------------------------------------------
@@ -221,6 +276,65 @@ def scenario_resolvable_contention(rounds_to_confirm=3, verbose=True):
     return Scheduler([A, B], rounds_to_confirm, verbose).run()
 
 
+def scenario_three_cycle(rounds_to_confirm=3, verbose=True):
+    """
+    3-process cycle: A holds L1 wants L2; B holds L2 wants L3; C holds L3 wants L1.
+    Tests that detection finds an N>2 cycle, not just AB-BA.
+    """
+    L1, L2, L3 = Lock("L1"), Lock("L2"), Lock("L3")
+    A = Process("A", program=[("acquire", L1), ("work", 1),
+                              ("acquire", L2), ("release", L2), ("release", L1)])
+    B = Process("B", program=[("acquire", L2), ("work", 1),
+                              ("acquire", L3), ("release", L3), ("release", L2)])
+    C = Process("C", program=[("acquire", L3), ("work", 1),
+                              ("acquire", L1), ("release", L1), ("release", L3)])
+    return Scheduler([A, B, C], rounds_to_confirm, verbose).run()
+
+
+def scenario_knot(rounds_to_confirm=3, verbose=True):
+    """
+    A KNOT: a 3-cycle A->B->C->A, plus a fourth process D that holds nothing the
+    cycle needs but is itself blocked waiting INTO the cycle (D wants L1, held by
+    A). D is not ON the cycle, but D can never make progress because the cycle
+    never releases. This is the knot shape: every member is doomed, but only
+    three are on the directed cycle.
+
+    Required behavior: detection must DECLARE deadlock (the cycle exists and is
+    found by DFS), and the returned cycle should be the A-B-C cycle. D is
+    correctly starved but is a *tail into* the knot, not part of the minimal
+    cycle -- testing that the detector localizes the actual cycle rather than
+    smearing the whole starved set together.
+    """
+    L1, L2, L3, L4 = Lock("L1"), Lock("L2"), Lock("L3"), Lock("L4")
+    A = Process("A", program=[("acquire", L1), ("work", 1),
+                              ("acquire", L2), ("release", L2), ("release", L1)])
+    B = Process("B", program=[("acquire", L2), ("work", 1),
+                              ("acquire", L3), ("release", L3), ("release", L2)])
+    C = Process("C", program=[("acquire", L3), ("work", 1),
+                              ("acquire", L1), ("release", L1), ("release", L3)])
+    # D holds L4 (its own), does work, then wants L1 -- which A holds forever.
+    D = Process("D", program=[("acquire", L4), ("work", 1),
+                              ("acquire", L1), ("release", L1), ("release", L4)])
+    return Scheduler([A, B, C, D], rounds_to_confirm, verbose).run()
+
+
+def scenario_tree_one_escapes(rounds_to_confirm=3, verbose=True):
+    """
+    Multi-dependency tree where it LOOKS like a tangle but one process can
+    actually finish, releasing the rest. Must COMPLETE, never declare deadlock.
+
+    A wants L1 (free) -> gets it, works, releases. B and C both also want L1 but
+    in sequence behind A. No cycle: it's a contention tree with a live root.
+    This is the false-positive trap at N>2: lots of blocked processes, budgets
+    draining, but a live root means no cycle ever closes.
+    """
+    L1 = Lock("L1")
+    A = Process("A", program=[("acquire", L1), ("work", 1), ("release", L1)])
+    B = Process("B", program=[("acquire", L1), ("work", 1), ("release", L1)])
+    C = Process("C", program=[("acquire", L1), ("work", 1), ("release", L1)])
+    return Scheduler([A, B, C], rounds_to_confirm, verbose).run()
+
+
 if __name__ == "__main__":
     print("=" * 64)
     print("SCENARIO 1: true AB-BA deadlock (must be PROVEN, no timer)")
@@ -241,11 +355,38 @@ if __name__ == "__main__":
     print("result:", r3[0], "at round", r3[1], "\n")
 
     print("=" * 64)
+    print("SCENARIO 4: 3-process cycle A->B->C->A (must be PROVEN)")
+    print("=" * 64)
+    r4 = scenario_three_cycle()
+    print("result:", r4[0], "at round", r4[1], "\n")
+
+    print("=" * 64)
+    print("SCENARIO 5: KNOT (3-cycle + D waiting into it; PROVEN, cycle=A,B,C)")
+    print("=" * 64)
+    r5 = scenario_knot()
+    print("result:", r5[0], "at round", r5[1],
+          "cycle:", " -> ".join(p.name for p in (r5[2] or [])), "\n")
+
+    print("=" * 64)
+    print("SCENARIO 6: contention tree, live root (must COMPLETE)")
+    print("=" * 64)
+    r6 = scenario_tree_one_escapes()
+    print("result:", r6[0], "at round", r6[1], "\n")
+
+    print("=" * 64)
     print("VERDICT")
     print("=" * 64)
-    print(f"  deadlock scenario   -> {r1[0]:10}  (want: deadlock)")
-    print(f"  slow-alive scenario -> {r2[0]:10}  (want: completed)")
-    print(f"  contention scenario -> {r3[0]:10}  (want: completed)")
-    ok = (r1[0] == "deadlock" and r2[0] == "completed" and r3[0] == "completed")
-    print(f"\n  ALL CLAIMS HELD: {ok}")
+    print(f"  1 deadlock (AB-BA)      -> {r1[0]:10}  (want: deadlock)")
+    print(f"  2 slow-but-alive        -> {r2[0]:10}  (want: completed)")
+    print(f"  3 resolvable contention -> {r3[0]:10}  (want: completed)")
+    print(f"  4 three-cycle           -> {r4[0]:10}  (want: deadlock)")
+    print(f"  5 knot                  -> {r5[0]:10}  (want: deadlock)")
+    print(f"  6 contention tree       -> {r6[0]:10}  (want: completed)")
+    cyc5 = set(p.name for p in (r5[2] or []))
+    knot_localized = cyc5 == {"A", "B", "C"}
+    ok = (r1[0] == "deadlock" and r2[0] == "completed" and
+          r3[0] == "completed" and r4[0] == "deadlock" and
+          r5[0] == "deadlock" and r6[0] == "completed" and knot_localized)
+    print(f"\n  knot localized to the true cycle (A,B,C): {knot_localized}")
+    print(f"  ALL CLAIMS HELD: {ok}")
     print("  (and: grep this file for 'time' — there is no wall clock.)")
