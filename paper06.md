@@ -3,7 +3,7 @@
 **Series:** The Isomorphic Scheduler
 **Authors:** Fabian Franz & Claude (Team Phi / Isomorphic AI)
 **Status:** draft v1 · exhaustively verified · formal proof owed
-**Artifact:** `iso_safety.py` @ commit `cbd3a36`
+**Artifact:** `iso_safety.py`, `iso_progress.py` @ commit `ed4c6fc`
 
 > **TruthSeed (paper):** `iso-sched-06:conversion-not-duration`
 > A conserved-budget deadlock detector achieves safety (no false positives) and
@@ -67,6 +67,13 @@ We introduce three invariants for successful systems design:
 The deeper reading: a trade-off that looks fundamental can be an artifact of
 measuring the wrong quantity. Safety-versus-liveness is forced only if you measure
 duration. Measure conversion — the conserved quantity — and both fall out together.
+And once conversion is the measured quantity, agency can be made *active*: where
+progress is internal and invisible from outside (a 100%-CPU process that may be
+doing real work or merely spinning), the scheduler need not guess — it can *ask*,
+via a self-reported progress signal (`SIG_PROGRESS`), and let each process account
+for its own conversion. A process that does real work shows it and is spared; a
+spinner cannot and is reclaimed; a process that lies bears the cost itself, by
+reputation. The detector provides the honest channel; it does not police honesty.
 
 ---
 
@@ -209,7 +216,61 @@ read in the two cases. There is nothing to trade because there is no shared symp
 to confuse: the detector is blind to duration and sees only conversion, and
 conversion is exactly what differs. `(structural)`
 
-### 4.4 The three invariants, in full
+### 4.5 From passive safety to active agency: ask, don't infer `(structural; shown)`
+
+The safety result of §4.1 is *passive* agency: the detector never falsely aborts a
+process. But it leaves one case unfixed, and it is the case agency most wants. The
+detector infers conversion *externally* — from observable state change (a lock
+acquired, a counter moved). A process at 100% CPU that produces nothing looks, from
+outside, identical to a process at 100% CPU doing hard internal computation: neither
+changes observable state for a long time. External inference cannot separate them,
+so it must either let spinners burn the CPU forever (no agency to reclaim waste) or
+risk aborting the useful one (a safety and agency violation). Today the usual
+verdict is "this is impossible to fix from outside" — and that is true *from
+outside*.
+
+So stop inferring and **ask**. Give the process the means to account for itself: a
+progress signal, `SIG_PROGRESS`, to which the process replies with a monotone
+progress counter on a syscall line — "I am at N; last time I was at M < N." Now
+conversion is *self-reported*, which is the only channel that can distinguish
+internal-useful-work from internal-spinning:
+
+- A process answering with a *rising* counter is converting → its budget refills →
+  it is never flagged. The useful 100%-CPU process becomes distinguishable and safe
+  — the case external inference could not save.
+- A process that does not answer, or whose counter is *flat*, is not converting →
+  its budget drains → it is reclaimable, with no clock and without falsely accusing
+  the useful process. The spinner is reclaimed because it cannot (honestly) show
+  progress, not because a timer fired.
+
+This upgrades the agency invariant from passive ("we never falsely abort") to active
+("we give every process the means to account for itself"). The process is no longer
+a thing the scheduler watches and judges from outside; it is an agent that reports
+its own conversion and is taken at its word.
+
+**On lying.** A process can report progress it is not making. This is fine, and the
+framing matters: it is the *liar's* problem, not the detector's. The detector's job
+is to *provide the honest channel*, not to *enforce* honesty. A lie corrupts the
+liar's own evidence (the epistemic invariant: the system's ledger about that process
+is now the process's own false claim, which it will have to reconcile against
+delivered results). Honesty is the cooperative equilibrium; defection is visible to
+any out-of-band check that compares promised progress against delivered results, and
+a process that lies about progress and then fails to deliver is accountable by
+reputation — a matter for the layer above, exactly as a person who lies on their
+timesheet answers to their employer and not to the clock. (Verified: a useful
+100%-CPU task is kept alive; a spinner is reclaimed with no clock; a liar is accepted
+at face value in-loop but caught by an out-of-band reputation check comparing
+reported to delivered progress — reported 12, delivered 0.) `(shown)`
+
+The division of responsibility is the point. The detector guarantees safety and
+liveness *given an honest progress signal*, and provides agency by asking for that
+signal rather than guessing. Whether the signal is honest is the agent's own
+responsibility, enforced (if at all) by reputation, not by the scheduler. The
+scheduler does not need to police honesty to be correct; it needs only to offer the
+channel and act on what is reported, leaving the cost of dishonesty with the
+dishonest. `(structural)`
+
+### 4.6 The three invariants, in full
 
 - **Epistemic (evidence-tracking — truth that can update).** The detector asserts a
   deadlock only on direct evidence: a measured budget floor (conversion has
@@ -225,12 +286,17 @@ conversion is exactly what differs. `(structural)`
   another's expense — it is not "protect the slow at the cost of missing deadlocks"
   nor "catch deadlocks at the cost of aborting the slow." Both hold, so the whole is
   served. `(structural)`
-- **Agency (every action benefits all).** No process is ever aborted for a property
-  it does not have. Only a process that has genuinely ceased converting, and sits in
-  a closed cycle, is flagged — so no live process pays for the detector's
-  impatience, because the detector has none. The single action the detector takes
-  (declaring deadlock) is provably confined to processes that are truly stuck, so it
-  never harms a process that could have proceeded. `(structural)`
+- **Agency (every action benefits all / every agent may account for itself).** No
+  process is ever aborted for a property it does not have: only a process that has
+  genuinely ceased converting, in a closed cycle, is flagged, so no live process
+  pays for the detector's impatience, because the detector has none. This is the
+  *passive* form. The *active* form (§4.5) goes further: the detector gives every
+  process the means to account for itself via a self-reported progress signal,
+  rather than judging it from outside. A process that does real internal work can
+  show it and be spared; a process that spins cannot show progress and is reclaimed;
+  a process that lies bears the cost itself, by reputation. Agency is both the
+  guarantee of no false abort and the provision of a channel through which each
+  agent speaks for its own progress. `(structural)`
 
 These three are corollaries of measuring conversion: an evidence-based verdict
 (epistemic) that serves slow and fast alike (alignment) and never falsely aborts
@@ -331,6 +397,14 @@ liveness leak. Both are the next seed.
   latency (from L3) in Lean/Coq over the general transition system, upgrading the
   exhaustive `(shown)` to a universal `(proven)`. This composes with the Paper 04
   Lean task: safety/liveness are corollaries of the conservation laws proved there.
+- **The `SIG_PROGRESS` syscall, for real.** §4.5's self-reported progress is a
+  kernel feature: a signal a process answers with a monotone progress counter, so
+  the scheduler can reclaim a non-progressing 100%-CPU process without a watchdog
+  timer and without aborting a genuinely busy one. Specify the ABI (the counter on
+  a syscall line, the no-answer-is-no-progress default), the interaction with the
+  flow scheduler (a process reporting progress refills its conversion budget), and
+  the optional reputation layer that compares reported against delivered progress.
+  This pairs naturally with the kernel exam of Paper 03.
 - **What counts as conversion.** Safety depends entirely on the progress signal
   being honest (a step that genuinely advances state must count as conversion, and
   nothing else may). Characterize the minimal faithful progress signal for a real
@@ -393,10 +467,11 @@ all along.
 
 ## Appendix A — Reproducibility
 
-- Artifact: `iso_safety.py`, committed at `cbd3a36` (Team Phi).
-- Run: `python3 iso_safety.py` — prints the per-family, per-k classification table,
-  the detection-latency table, and a verdict ending in `SAFETY AND LIVENESS BOTH
-  HOLD: True`.
+- Artifacts: `iso_safety.py` (exhaustive safety/liveness) and `iso_progress.py`
+  (self-reported progress / active agency), committed at `ed4c6fc` (Team Phi).
+- Run: `python3 iso_safety.py` — prints the classification and latency tables and a
+  verdict `SAFETY AND LIVENESS BOTH HOLD: True`. Run: `python3 iso_progress.py` —
+  prints the useful/spinner/liar outcomes and the reputation check.
 - No-timer audit: `grep -niE "time|sleep|clock|timeout|perf_counter|monotonic"
   iso_safety.py` returns only prose in comments.
 - Determinism: round-robin scheduling, no RNG; ground truth computed by detector-free
