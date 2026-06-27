@@ -58,10 +58,15 @@ a *process over time* — a schedule. Partition is taken as the normal assumptio
 consistency is deferred to a sync whose frequency makes reconciliation trivial;
 availability is required only pointwise; and the bridge is a brief
 mutually-deterministic publish with a remote-first staged commit. No node ever needs
-all three at the same instant, so the impossibility does not bind. Every failure
-path preserves the conserved content: remote failure reverts clean, and an
-unrecoverable local failure resyncs from the authority while leaving all subspaces
-untouched (both verified).
+all three at the same instant, so the impossibility does not bind. The sync trigger
+is not a clock but an *inventory mismatch* — a flat checksum reconciliation that
+makes the need to sync a verifiable fact, so eventual consistency is *measured* on
+the inventory rather than hoped for over time; and authority is *split* (one server
+owns the Future of work-in-progress sandboxes, another owns the Present of published
+content, the bridge collapses one into the other), so neither side must lie, guess,
+or sacrifice its integrity. Every failure path preserves the conserved content:
+remote failure reverts clean, and an unrecoverable local failure resyncs from the
+authority while leaving all subspaces untouched (both verified).
 
 We introduce three invariants for successful systems design:
 
@@ -278,6 +283,52 @@ The schedule that realizes them, each at its own moment:
   continuous mutual availability — only a brief window in which both ends can each
   run one atomic transaction to bridge.
 
+Two refinements make the schedule clock-free and integrity-preserving, and both
+matter.
+
+**The sync trigger is inventory mismatch, not a clock.** The demand for a sync is
+never "it has been N seconds." It is "my inventory hash does not match yours." Each
+side keeps a flat per-entity checksum map — five entities, five checksums — and a
+single root hash over them (a flat Merkle layer). One root comparison decides
+whether any sync is needed at all; if the roots match, there is no work and no timer
+was consulted. If they differ, reconciliation names *exactly* which entities are
+needed — "server still needs X" or "client still needs X," symmetric and
+verifiable. This is the epistemic invariant made cryptographic: the system does not
+*guess* it needs to sync on a timer; it *knows*, from the checksum evidence, that it
+does. Eventual consistency is then *measured*, not hoped — it is the state of the
+inventory reconciliation at a given moment, a verifiable fact rather than a temporal
+promise. (Verified: five matching checksums register as in-sync with no clock; one
+changed entity flips the root and the reconciliation names exactly that one entity.)
+
+**Sync is idempotent, so it is safe to run whenever spare energy is routed to it.**
+Because the sandboxes are not yet published, a sync can run once, ten times, or as a
+full wipe-and-replace of the sandbox and reach the same state every time. The
+operation is purely state-driven (a join / Merkle reconciliation), so the scheduler
+can route spare capacity to it opportunistically — there is no count or timing to get
+right. (Verified: one sync, ten syncs, and a wipe-then-replace all reach the
+identical sandbox state.) This is the conserved-quantity merge property (D2's
+idempotence) applied to the sync itself.
+
+**The agency split is what lets neither side ever lie, guess, or sacrifice
+integrity.** Authority is partitioned by domain, isolating the *Future* from the
+*Present*:
+
+- The **content server is the authority over the Future** — the work-in-progress
+  sandboxes / subspaces. It alone decides what the next state will be.
+- The **publish server is the authority over the Present** — the live, published
+  content. It alone decides what the current state is.
+- The **bridge (`publish`) is the atomic function that collapses the Future into the
+  Present.** It is the sole crossing between the two authorities.
+
+Because the authorities are split, each server holds its own conserved quantity with
+full integrity and never needs to guess about or overwrite the other's domain. The
+content server is never wrong about the Future (it owns it); the publish server is
+never wrong about the Present (it owns it); and the only moment they must agree is
+the atomic bridge. (Verified: content edits the Future without touching the publish
+server's Present; the bridge is the only operation that moves a change from sandbox
+to live.) This is the agency invariant realized as an architecture: split authority
+means no part must sacrifice its own correctness for the whole's.
+
 The bridge — *publish* — is the only moment both nodes must be momentarily
 deterministic-available together. The protocol (Drupal-Workspaces-shaped):
 
@@ -402,6 +453,9 @@ as all-to-all gossip until quiescent. **No wall-clock primitive is present.**
 | CAP: frequent sync | per-merge delta, frequent vs rare | **PASS** — frequent max delta 3 vs rare single delta 20 |
 | CAP: remote-fail safety | remote tx fails | **PASS** — clean revert, nothing published, subspace intact |
 | CAP: residual local fail | remote commits, local unrecoverable | **PASS** — local resyncs from authority, all subspaces preserved |
+| CAP: sync idempotent | once vs ten times vs wipe-and-replace | **PASS** — identical state; safe to run anytime |
+| CAP: inventory trigger | 5 checksums match / one changes | **PASS** — match = in-sync (no clock); change names exactly the delta |
+| CAP: agency split | content owns Future, publish owns Present | **PASS** — bridge is the sole Future→Present crossing |
 
 Readings:
 
