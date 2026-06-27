@@ -33,10 +33,22 @@ We show three things, no wall clock:
        outcomes that have actually resolved, never on an assumed one -- removes the
        race entirely, across all orderings.
 
-  (F3) FLEXIBILITY IS SPENT, NOT MOVED (not conserved). Collapsing a decision is
-       irreversible and local: the potential does not reappear elsewhere. We
-       contrast it with a conserved quantity to show it obeys a different law --
-       a one-way loss (like entropy), not a conservation.
+  (F3) FLEXIBILITY SPENT IS ACTUALITY CREATED -- ONE CONSERVED TRANSFORMATION.
+       Collapsing a decision looks like a one-way LOSS if you watch only the
+       potential side: the foreclosed outcomes are gone, flexibility decreases.
+       But this is not the opposite of conservation. From the middle, collapse
+       does not destroy potential into nothing -- it CONVERTS potential into
+       actuality. What is spent on the Future (potential) side is exactly what
+       becomes definite on the Present (actual) side. Draw the boundary around
+       potential ALONE and it looks non-conserved (monotone loss); draw it around
+       potential + actual -- the WHOLE -- and it is conserved. "Non-conservation"
+       was an artifact of where the line was drawn, the same way CAP's
+       impossibility was an artifact of demanding simultaneity. Conservation and
+       non-conservation are one transformation seen from two sides: read from the
+       Future it is loss, read from the Present it is creation, and it is the same
+       event. This is the middle way, and it is Paper 04's stock=integral-of-flow
+       and Paper 05's Future->Present bridge seen at the deepest level: collapsing
+       potential IS the bridge that consolidates Future into Present.
 
 The three invariants, at the network layer:
   - EPISTEMIC/WISDOM: represent the distribution; collapse only on evidence
@@ -106,24 +118,45 @@ def flexible_system_has_race(opA, opB):
 
 @dataclass
 class FlexState:
-    """Potential as a set of still-open outcomes. Collapsing removes outcomes
-    irreversibly; the removed potential does NOT appear anywhere else."""
-    open_outcomes: set
+    """One DECISION. While open, the decision lives on the POTENTIAL side,
+    distributed across its mutually-exclusive branches (the open outcomes) -- but
+    it is ONE decision, not many: the branches are alternatives, not separate
+    stuff. Collapse moves that one decision from the potential side to the ACTUAL
+    side (one chosen outcome). So the conserved quantity is the decision itself
+    (one quantum): POTENTIAL while open, ACTUAL once collapsed. Watched on the
+    potential side it drains 1->0 (the Future empties); on the actual side it
+    fills 0->1 (the Present accretes); the WHOLE -- potential + actual -- is
+    invariant at 1. Conservation and non-conservation are this one quantum seen
+    from two sides. The middle way."""
+    open_outcomes: set                       # branches the one decision is open across
+    resolved: bool = False
+    actual_outcome: object = None
     spent_log: list = field(default_factory=list)
 
     def collapse_to(self, outcome):
-        """Commit to one outcome. Irreversible: the other potential is GONE,
-        not transferred. This is the one-way law (unlike conserved budget)."""
+        """Move the one decision from potential to actual. Seen from the Future:
+        the branches foreclose (loss). Seen from the Present: one outcome becomes
+        real (creation). Same event, two sides."""
         assert outcome in self.open_outcomes, "cannot collapse to an excluded outcome"
-        removed = self.open_outcomes - {outcome}
-        self.spent_log.append(("collapsed", outcome, "lost", frozenset(removed)))
-        self.open_outcomes = {outcome}
-        return removed   # returned only to show it vanishes, not where it 'went'
+        foreclosed = self.open_outcomes - {outcome}
+        self.open_outcomes = set()
+        self.resolved = True
+        self.actual_outcome = outcome
+        self.spent_log.append(("collapsed", outcome, "foreclosed", frozenset(foreclosed)))
+        return foreclosed
 
-    def flexibility(self):
-        """A measure of remaining capacity-to-not-collapse: how many outcomes are
-        still open. Monotone NON-INCREASING under collapse (one-way)."""
-        return len(self.open_outcomes)
+    def potential(self):
+        """The decision on the FUTURE side: 1 while open, 0 once collapsed."""
+        return 0 if self.resolved else 1
+
+    def actuality(self):
+        """The decision on the PRESENT side: 0 while open, 1 once collapsed."""
+        return 1 if self.resolved else 0
+
+    def whole(self):
+        """potential + actuality = 1, always. The one decision is conserved; only
+        WHICH SIDE it lives on changes. The middle-way invariant."""
+        return self.potential() + self.actuality()
 
 
 if __name__ == "__main__":
@@ -153,24 +186,33 @@ if __name__ == "__main__":
     print(f"  flexible system (carries distribution, acts on resolved order):")
     print(f"  race samples: {flex_races}  (none -- it never assumed an order)")
 
-    print("\n--- F3: flexibility is spent, not moved (one-way, not conserved) ---")
+    print("\n--- F3: flexibility spent IS actuality created (one transformation) ---")
     fs = FlexState(open_outcomes={"A_first", "B_first"})
-    print(f"  open outcomes before: {fs.open_outcomes} (flexibility={fs.flexibility()})")
-    lost = fs.collapse_to("A_first")
-    print(f"  collapsed to A_first; potential LOST (not transferred): {set(lost)}")
-    print(f"  open outcomes after:  {fs.open_outcomes} (flexibility={fs.flexibility()})")
-    print(f"  flexibility is MONOTONE NON-INCREASING under collapse (one-way law);")
-    print(f"  the lost outcome did not reappear elsewhere -- NOT conserved.")
+    whole_before = fs.whole()
+    print(f"  before collapse: potential={fs.potential()} actual={fs.actuality()} "
+          f"whole={fs.whole()}")
+    foreclosed = fs.collapse_to("A_first")
+    whole_after = fs.whole()
+    print(f"  collapse to A_first: foreclosed {set(foreclosed)} on the FUTURE side,")
+    print(f"                       created 'A_first' on the PRESENT side")
+    print(f"  after collapse:  potential={fs.potential()} actual={fs.actuality()} "
+          f"whole={fs.whole()}")
+    print(f"  FUTURE view: potential 1->0 (the decision leaves the Future)")
+    print(f"  PRESENT view: actuality 0->1 (the decision enters the Present)")
+    print(f"  WHOLE (potential+actual) conserved: {whole_before} == {whole_after} "
+          f"-> {whole_before == whole_after}")
+    print(f"  Non-conservation was an artifact of watching only the Future side.")
 
     print("\n" + "=" * 76)
     print("VERDICT")
     print("=" * 76)
     f1 = len(races) > 0
     f2 = len(flex_races) == 0
-    f3 = fs.flexibility() < 2   # collapsed: flexibility strictly decreased
+    f3 = (whole_before == whole_after) and fs.potential() < whole_before
     print(f"  F1 premature collapse manufactures races:        {f1}")
     print(f"  F2 flexibility (carry distribution) dissolves:   {f2}")
-    print(f"  F3 flexibility is spent one-way, not conserved:  {f3}")
+    print(f"  F3 collapse converts potential->actual, whole conserved: {f3}")
     print(f"\n  ALL HELD: {f1 and f2 and f3}")
-    print("  Flexibility is the capacity to not collapse. It is wisdom, and it is")
-    print("  the one invariant that is spent, not conserved. No wall clock.")
+    print("  Conservation and non-conservation are one transformation seen from")
+    print("  two sides. From the Future: flexibility spent. From the Present:")
+    print("  actuality created. The middle way. No wall clock.")
