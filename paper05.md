@@ -1,4 +1,4 @@
-# Paper 05 — What Goes Around Comes Around: Conservation Across Partition, Eventual Consistency, and Solving CAP by Scheduling in Time
+# Paper 05 — CAP Is a Scheduling Problem: The Three Invariants That Make It Hard Are the Conservation Laws That Solve It
 
 **Series:** The Isomorphic Scheduler
 **Authors:** Fabian Franz & Claude (Team Phi / Isomorphic AI)
@@ -46,15 +46,22 @@ unseen by another is a deferred obligation; on heal it surfaces in full, never
 reduced by having been hidden (verified: 40 units spent off one node's books appear
 in full on the other node when the partition heals).
 
-Finally, we **solve CAP** — not by trading its three properties but by decoupling
-them in time. Partition is taken as the normal assumption (work happens in an
-isolated sandbox by default); consistency is deferred to a sync whose frequency
-makes reconciliation trivial; availability is required only pointwise (one atomic
-reversible transaction); and the bridge between nodes is a brief
-mutually-deterministic publish with a remote-first staged commit. No node ever
-needs all three properties at the same instant. Every failure path preserves the
-conserved content: remote failure reverts clean, and an unrecoverable local failure
-resyncs from the authority while leaving all subspaces untouched (both verified).
+Finally, we **solve CAP**, and the solution rests on one reframing: **CAP is a
+scheduling problem, and the three properties that make it look impossible are
+exactly the three conservation invariants that solve it.** Consistency is the
+epistemic invariant (every node converging on the same conserved total);
+availability is the agency invariant (every part can take an atomic reversible
+action at any instant); partition-tolerance is the alignment invariant (separated
+parts hold conserved shares that merge without loss). CAP's impossibility comes
+from demanding the three as a *simultaneous snapshot*; conservation delivers them as
+a *process over time* — a schedule. Partition is taken as the normal assumption;
+consistency is deferred to a sync whose frequency makes reconciliation trivial;
+availability is required only pointwise; and the bridge is a brief
+mutually-deterministic publish with a remote-first staged commit. No node ever needs
+all three at the same instant, so the impossibility does not bind. Every failure
+path preserves the conserved content: remote failure reverts clean, and an
+unrecoverable local failure resyncs from the authority while leaving all subspaces
+untouched (both verified).
 
 We introduce three invariants for successful systems design:
 
@@ -220,22 +227,56 @@ the 40 surfaces in full, exactly the hidden amount. `(shown)`
 ### 4.4 Solving CAP by decoupling C, A, P in time `(structural; shown)`
 
 D1–D3 show conservation *survives* partition. They do not yet *solve* CAP — they
-give eventual consistency, which is CAP's standard concession. The solution is to
-stop treating C, A, and P as three properties traded off *simultaneously* and
-instead decouple them in *time*, each required only at its own moment:
+give eventual consistency, which is CAP's standard concession. The solution rests
+on a single reframing, which is the strong claim of this paper:
 
-- **Partition is the normal assumption, not the failure case.** Work happens by
-  default in an isolated sandbox (a subspace / "workspace"); you are always
-  partitioned and do not wait for or fear a partition event.
-- **Consistency is deferred** to a sync: the sandbox pulls from the authority
-  whenever availability permits and no partition blocks it. Crucially, *frequency
-  makes reconciliation trivial* — sync often and every merge is a tiny delta, so
-  the hard case (a large divergent merge) never arises. (Verified: a node syncing
-  every tick faces a max delta of 3 per merge; a node syncing once at the end faces
-  a single delta of 20 — the divergent merge the frequent syncer never meets.)
-- **Availability is required only pointwise**: a single atomic, *reversible*
-  transaction. The system never needs continuous mutual availability — only a brief
-  window in which both ends can each run one atomic transaction to bridge.
+> **CAP is a scheduling problem, and the three properties that make it look
+> impossible are exactly the three conservation invariants that solve it.**
+
+CAP says you cannot have Consistency, Availability, and Partition-tolerance at
+once. Read those three not as a static triple to be held simultaneously, but as the
+series' three conservation invariants viewed at distributed scale:
+
+- **Consistency is the epistemic invariant.** Consistency is every node reading the
+  same conserved total — honest, convergent accounting of the conserved quantity.
+  The epistemic invariant (a node's view is honestly partial and updates monotonically
+  toward the true total) *is* consistency, achieved over time rather than at every
+  instant.
+- **Availability is the agency invariant.** Availability is the ability to make a
+  move — to act on the state — at any moment. The agency invariant (every part can
+  always take an atomic, reversible action on the conserved quantity, and no action
+  escapes the books) *is* availability, required only pointwise: one atomic
+  transaction, any time.
+- **Partition-tolerance is the alignment invariant.** Partition-tolerance is
+  separated parts each holding a valid share that recombines without loss. The
+  alignment invariant (merge unions authoritative contributions, never overwriting;
+  shared, not replacing) *is* partition-tolerance: the split parts reconcile because
+  each holds a conserved share.
+
+So the three properties CAP treats as a static impossibility are the three
+conservation invariants this series has carried since Paper 01. The impossibility
+arises only from demanding them as a *simultaneous snapshot*. Conservation delivers
+them as a *process over time* — which is to say, as a schedule. **The triangle that
+looks impossible as a snapshot is the conservation law seen as a schedule.** What
+makes CAP hard (three properties in tension) is precisely what makes it solvable
+(three conservation invariants that, scheduled, reinforce rather than conflict).
+
+The schedule that realizes them, each at its own moment:
+
+- **Partition is the normal assumption, not the failure case** (alignment is the
+  default: work happens in an isolated sandbox / subspace; you are always
+  partitioned and do not wait for or fear a partition event).
+- **Consistency is deferred** to a sync (the epistemic invariant updating over
+  time): the sandbox pulls from the authority whenever available and unpartitioned.
+  Crucially, *frequency makes reconciliation trivial* — sync often and every merge
+  is a tiny delta, so the hard case (a large divergent merge) never arises.
+  (Verified: a node syncing every tick faces a max delta of 3 per merge; a node
+  syncing once at the end faces a single delta of 20 — the divergent merge the
+  frequent syncer never meets.)
+- **Availability is required only pointwise** (the agency invariant, exercised at an
+  instant): a single atomic, *reversible* transaction. The system never needs
+  continuous mutual availability — only a brief window in which both ends can each
+  run one atomic transaction to bridge.
 
 The bridge — *publish* — is the only moment both nodes must be momentarily
 deterministic-available together. The protocol (Drupal-Workspaces-shaped):
@@ -258,14 +299,12 @@ untouched (verified: an unrelated work-in-progress sandbox edit survives the
 residual-failure path). At no point is the conserved content lost, and at no point
 does a partial publish survive.
 
-This is the series' alignment invariant at distributed scale: the two ends succeed
-together or the system safely reverts; neither is sacrificed, and the conserved
-content is preserved through every failure path. CAP is not violated — under
-partition the system is available and eventually consistent — but the *cost* of
-the concession is driven to near-zero, because partition is assumed (not feared),
-consistency is deferred (and made trivial by frequent sync), and availability is
-needed only pointwise (one atomic reversible transaction at the bridge). **No node
-ever needs all three properties at the same instant.** `(shown)`
+CAP is not violated — under partition the system is available and eventually
+consistent — but the *impossibility does not bind*, because the theorem assumes the
+three are demanded as a simultaneous snapshot, and the schedule realizes them as a
+process. **No node ever needs all three properties at the same instant.** The three
+invariants that make CAP hard are the three conservation laws that solve it.
+`(shown)`
 
 ### 4.5 The three invariants, in full
 
@@ -441,25 +480,31 @@ books surfacing in full (D3).
 
 The technical core is solid and bounded: for a conserved quantity represented as a
 PN-counter, eventual consistency is not a concession but a consequence —
-order-independent convergence that conservation forces. And CAP itself is solved,
-not by trading its three properties but by decoupling them in time: partition is
-the normal assumption, consistency is deferred to a sync made trivial by frequency,
-availability is required only pointwise as one atomic reversible transaction, and
-the bridge is a brief mutually-deterministic publish whose remote-first staged
-commit preserves the conserved content through every failure path. No node ever
-needs all three properties at the same instant — which is why the impossibility
-does not bind: the theorem assumes the three are demanded *simultaneously*, and
-scheduling them in time dissolves the conflict. The broader readings — what
-goes around comes around, debt deferred comes due, off-the-books resources
-surfacing as debt elsewhere — are genuine inspiration that this structure suggests,
-and we have marked exactly where the proof stops and the inspiration begins: a
-closed conserved model proves the closed claims; the open-system coupling that
-would make the human and ecological readings into theorems is named as further work,
-not claimed. What we can say with proof is the load-bearing part: you cannot take a
-conserved quantity off the books by partitioning away from the ledger. Hidden is not
-destroyed. Deferred is not forgiven. What was conserved comes around — because the
-merge cannot lose what conservation kept, and the bridge transaction commits both
-ends together or neither.
+order-independent convergence that conservation forces. And CAP itself is solved by
+one reframing: **CAP is a scheduling problem, and the three properties that make it
+look impossible are the three conservation invariants that solve it.** Consistency
+is the epistemic invariant, availability is the agency invariant, partition-tolerance
+is the alignment invariant — the same three this series has carried since Paper 01.
+The impossibility comes only from demanding them as a simultaneous snapshot; read as
+a process over time — a schedule — they reinforce rather than conflict. The triangle
+that looks impossible as a snapshot is the conservation law seen as a schedule. The
+schedule realizes them each at its own moment: partition is the normal assumption,
+consistency is deferred to a sync made trivial by frequency, availability is required
+only pointwise as one atomic reversible transaction, and the bridge is a brief
+mutually-deterministic publish whose remote-first staged commit preserves the
+conserved content through every failure path. No node ever needs all three at the
+same instant — which is why the impossibility does not bind.
+
+The broader readings — what goes around comes around, debt deferred comes due,
+off-the-books resources surfacing as debt elsewhere — are genuine inspiration that
+this structure suggests, and we have marked exactly where the proof stops and the
+inspiration begins: a closed conserved model proves the closed claims; the
+open-system coupling that would make the human and ecological readings into theorems
+is named as further work, not claimed. What we can say with proof is the
+load-bearing part: you cannot take a conserved quantity off the books by
+partitioning away from the ledger. Hidden is not destroyed. Deferred is not
+forgiven. What was conserved comes around — because the merge cannot lose what
+conservation kept, and the bridge transaction commits both ends together or neither.
 
 ---
 

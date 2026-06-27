@@ -1,8 +1,17 @@
 """
-iso_cap.py — Paper 05 (CAP addendum): decoupling C, A, P in TIME.
+iso_cap.py — Paper 05: CAP is a scheduling problem.
 
-Paper 05's core showed conservation SURVIVES partition (eventual reconciliation).
-It did not SOLVE CAP. This addendum does, via the insight that CAP's three
+THE STRONG CLAIM: CAP is a scheduling problem, and the three properties that make
+it look impossible are EXACTLY the three conservation invariants that solve it:
+  Consistency         = EPISTEMIC invariant (all nodes converge on one conserved total)
+  Availability        = AGENCY invariant    (atomic reversible action at any instant)
+  Partition-tolerance = ALIGNMENT invariant (separated parts hold conserved shares
+                        that merge without overwrite)
+CAP's impossibility comes from demanding the three as a SIMULTANEOUS SNAPSHOT.
+Conservation delivers them as a PROCESS OVER TIME -- a schedule. The triangle that
+looks impossible as a snapshot is the conservation law seen as a schedule.
+
+This addendum solves CAP, via the insight that CAP's three
 properties are not traded off against each other -- they are DECOUPLED IN TIME,
 each required only at its own moment:
 
