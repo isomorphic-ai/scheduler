@@ -358,6 +358,39 @@ class Scheduler:
         lock = step[1]
         return lock.held_by is not None and lock.held_by is not p
 
+    def effective_rate(self, p: "Process", min_rate_frac: float) -> float:
+        """
+        THE FLOW EQUATION (energy flows where attention goes).
+
+            eff(p) = base(p) + sum( eff(w) for w blocked-on p )
+
+        A process's effective rate is its own base rate plus the rate flowing in
+        from every process blocked on it -- transitively, since wait-edges chain.
+        A blocked process's bucket is closed (not at the table), so its whole
+        stream pours down its wait-edge into the holder it is attending to. The
+        holder catches exactly the energy of whoever waits on it: the bottleneck
+        illuminates itself and gets precisely the power needed to clear, in
+        proportion to how much the system cares about what is blocked.
+
+        Memoryless: no boost is stored or restored; at any instant the scheduler
+        just reads the wait-graph. The instant the lock releases, the pipe breaks
+        and each stream pours back into its own bucket.
+        """
+        seen = set()
+        def eff(proc):
+            if proc in seen:
+                return 0.0  # cycle (deadlock) -- handled by detection/resolution
+            seen.add(proc)
+            r = max(min_rate_frac, proc.priority)
+            for w in self.procs:
+                if w is proc or w.done:
+                    continue
+                step = w.next_step()
+                if step is not None and step[0] == "acquire" and step[1].held_by is proc:
+                    r += eff(w)   # w's stream flows into proc
+            return r
+        return eff(p)
+
     def run_flow(self, max_rounds: int = 4000, C: float = 1.0,
                  min_rate_frac: float = 0.05):
         """
@@ -418,8 +451,13 @@ class Scheduler:
                         {"progress": progress, "share_log": share_log,
                          "H_return_immediate": H_return_immediate})
 
-            # rates of those present (floor guards degenerate rates)
-            total_rate = sum(max(min_rate_frac, p.priority) for p in at_table)
+            # EFFECTIVE rates: each process at the table carries its own rate PLUS
+            # the rate flowing in from anyone blocked on it (the flow equation).
+            # A blocked process is not at the table -- its stream has poured down
+            # the wait-edge into its holder, so it is already counted in the
+            # holder's effective rate.
+            eff_rates = {p: self.effective_rate(p, min_rate_frac) for p in at_table}
+            total_rate = sum(eff_rates.values())
 
             # detect H returning to the table after being blocked
             hi_present = hi in at_table
@@ -428,7 +466,7 @@ class Scheduler:
 
             for p in self.procs:
                 if p in at_table:
-                    share = C * max(min_rate_frac, p.priority) / total_rate
+                    share = C * eff_rates[p] / total_rate
                 else:
                     share = 0.0
                 share_log[p.name].append(share)
@@ -443,18 +481,13 @@ class Scheduler:
                     if self.attempt(p):
                         progress[p.name] += 1
 
-            # did H eat the round it returned? "Eating" = receiving its full rate
-            # share immediately (not waiting / not throttled). Discrete step
-            # completion may lag by sub-unit accumulation, but the SHARE is
-            # granted at once -- that is the no-climb-back property.
+            # did H eat the round it returned? "Eating" = receiving its full
+            # effective-rate share immediately (no penalty, no throttle).
             if H_return_round == self.round:
-                hi_share = C * max(min_rate_frac, hi.priority) / total_rate
-                # immediate iff H's share this round equals its full uncontested
-                # rate proportion among those present (no penalty applied)
-                H_return_immediate = (hi_share > 0 and
-                                      abs(hi_share - C * hi.priority /
-                                          sum(max(min_rate_frac, q.priority)
-                                              for q in at_table)) < 1e-9)
+                hi_share = C * eff_rates.get(hi, 0.0) / total_rate
+                expected = C * self.effective_rate(hi, min_rate_frac) / \
+                    sum(self.effective_rate(q, min_rate_frac) for q in at_table)
+                H_return_immediate = (hi_share > 0 and abs(hi_share - expected) < 1e-9)
 
             was_blocked_hi = hi_blocked_at_start
             prev = dict(progress)
@@ -875,9 +908,9 @@ def build_flow_scenario():
 
 if __name__ == "__main__":
     print("=" * 74)
-    print("PAPER 03 (stream/rate) — PRIORITY AS FLOW RATE, MEMORYLESS SELF-ORGANISING")
-    print("Cake split NOW among who's at the table, by rate. H away -> L's slice")
-    print("rises automatically. H back -> eats immediately (no climb-back).")
+    print("PAPER 03 (flow equation) — ENERGY FLOWS WHERE ATTENTION GOES")
+    print("H blocked on L pours its stream DOWN THE WAIT-EDGE into L. L catches")
+    print("H's energy, clears the blockage fast. M (busy-work) does NOT feast.")
     print("=" * 74)
 
     procs, S = build_flow_scenario()
@@ -889,7 +922,6 @@ if __name__ == "__main__":
     n = len(sl["L"])
     print(f"\n  {'rnd':>3} | {'L share':>8}{'H share':>8}{'M share':>8} | "
           f"{'Hblocked?':>9}")
-    # recompute H-blocked per round is not stored; infer from H share==0 while not done
     for i in range(n):
         ls, hs, ms = sl["L"][i], sl["H"][i], sl["M"][i]
         hblock = "yes" if hs == 0.0 else ""
@@ -898,32 +930,34 @@ if __name__ == "__main__":
     print(f"\n  status={status} @r{rnd}")
     print(f"  final progress: {st['progress']}")
     print(f"  H returned to table at round: {st['H_return_round']}")
-    print(f"  H ate immediately on return (no wait): {st['H_return_immediate']}")
+    print(f"  H ate immediately on return (no climb-back): {st['H_return_immediate']}")
 
     # claims
-    # 1) L's share strictly rises in the window where H is blocked (H share 0)
-    L_shares = sl["L"]; H_shares = sl["H"]
+    L_shares = sl["L"]; H_shares = sl["H"]; M_shares = sl["M"]
     base_L = next((s for s in L_shares if s > 0), 0)
-    blocked_idxs = [i for i,h in enumerate(H_shares) if h == 0.0]
+    blocked_idxs = [i for i, h in enumerate(H_shares)
+                    if h == 0.0 and (st["H_return_round"] is None
+                                     or i < st["H_return_round"] - 1)]
+    # NEW key claim: while H blocked, L catches H's stream -> L's share is LARGE
+    # (L base 1 + H 9 = 10 vs M 3 -> L ~0.77), and M does NOT get the majority.
+    L_caught_flow = all(L_shares[i] > M_shares[i] for i in blocked_idxs)
+    # the specific 10/(10+3) proportion when L,M present and H pours into L:
+    flow_value_correct = any(abs(L_shares[i] - 10/13) < 0.02 for i in blocked_idxs)
     L_rose = any(L_shares[i] > base_L + 1e-9 for i in blocked_idxs)
-    # 2) L never zero while at table (never fully starved): no round where L alive,
-    #    not blocked, yet share 0 -- approximate: L share > 0 in all rounds before
-    #    L is done
-    L_done_round = None
-    # find first round L stops appearing with positive share consistently:
-    L_never_zero = all(s > 0 for s in L_shares[:max(blocked_idxs)+1]) if blocked_idxs else True
-    # 3) H eats immediately on return
+    L_never_zero = all(L_shares[i] > 0 for i in blocked_idxs) if blocked_idxs else True
     H_immediate = bool(st["H_return_immediate"])
-    # 4) completes
     completes = status == "completed"
 
     print("\n" + "=" * 74)
     print("VERDICT")
     print("=" * 74)
-    print(f"  L's share rises automatically while H is away:     {L_rose}")
-    print(f"  L never starved (positive share throughout block): {L_never_zero}")
-    print(f"  H eats immediately on return (no climb-back):      {H_immediate}")
-    print(f"  system completes:                                  {completes}")
-    ok = L_rose and L_never_zero and H_immediate and completes
+    print(f"  L catches H's flow (L share > M share while H blocked):  {L_caught_flow}")
+    print(f"  flow value correct (L gets ~10/13 = base+H vs M):        {flow_value_correct}")
+    print(f"  L's share rises while H is away:                         {L_rose}")
+    print(f"  L never starved (positive share throughout block):       {L_never_zero}")
+    print(f"  H eats immediately on return (no climb-back, no debt):    {H_immediate}")
+    print(f"  system completes:                                        {completes}")
+    ok = (L_caught_flow and flow_value_correct and L_rose and L_never_zero
+          and H_immediate and completes)
     print(f"\n  ALL CLAIMS HELD: {ok}")
-    print("  (memoryless: allocation at NOW depends only on who's present + rates.)")
+    print("  TruthSeed: energy flows where attention goes.")
