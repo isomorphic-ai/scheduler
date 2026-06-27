@@ -328,10 +328,15 @@ def check_inventory_trigger():
 
 def check_agency_split():
     """The agency split: content server is AUTHORITY OVER THE FUTURE (sandboxes),
-    publish server is AUTHORITY OVER THE PRESENT (live). Neither lies, guesses, or
-    sacrifices integrity; each holds its conserved quantity until the bridge
-    collapses Future into Present. Verify each side is authoritative only over its
-    own domain and the bridge is the sole crossing."""
+    publish server is AUTHORITY OVER THE PRESENT (live). This is THE right split,
+    not an arbitrary one: a partition is a CHANGE in connectivity (connected at t0,
+    split at t1), and a change requires t0 != t1 -- so partition is intrinsically
+    temporal, and the axis to split authority on is time itself (Present/Future).
+    The Present is consolidated fact, changed only by a reversible transaction; the
+    Future is pure potential, freely rewritten. The bridge is the reversible
+    transaction that consolidates a chosen Future into the Present. Neither side
+    lies, guesses, or sacrifices integrity; each holds its conserved quantity until
+    the bridge collapses Future into Present."""
     content = Node("content")   # authority over sandboxes (the future)
     publish_srv = Node("publish")  # authority over live (the present)
     publish_srv.live = {"page": "published-v1"}

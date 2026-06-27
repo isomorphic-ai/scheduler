@@ -61,12 +61,17 @@ mutually-deterministic publish with a remote-first staged commit. No node ever n
 all three at the same instant, so the impossibility does not bind. The sync trigger
 is not a clock but an *inventory mismatch* — a flat checksum reconciliation that
 makes the need to sync a verifiable fact, so eventual consistency is *measured* on
-the inventory rather than hoped for over time; and authority is *split* (one server
-owns the Future of work-in-progress sandboxes, another owns the Present of published
-content, the bridge collapses one into the other), so neither side must lie, guess,
-or sacrifice its integrity. Every failure path preserves the conserved content:
-remote failure reverts clean, and an unrecoverable local failure resyncs from the
-authority while leaving all subspaces untouched (both verified).
+the inventory rather than hoped for over time; and authority is *split* along the
+only axis a partition can fall on — time itself: one server owns the Future of
+work-in-progress sandboxes (pure potential, freely rewritten), another owns the
+Present of published content (consolidated fact, changed only by a reversible
+commit), and the bridge is the reversible transaction that consolidates a chosen
+Future into the Present. Because a partition is a change in connectivity and a
+change requires time to pass, Present/Future is not one arbitrary split but *the*
+split that matches the phenomenon, so neither side must lie, guess, or sacrifice its
+integrity. Every failure path preserves the conserved content: remote failure
+reverts clean, and an unrecoverable local failure resyncs from the authority while
+leaving all subspaces untouched (both verified).
 
 We introduce three invariants for successful systems design:
 
@@ -320,14 +325,44 @@ integrity.** Authority is partitioned by domain, isolating the *Future* from the
 - The **bridge (`publish`) is the atomic function that collapses the Future into the
   Present.** It is the sole crossing between the two authorities.
 
-Because the authorities are split, each server holds its own conserved quantity with
-full integrity and never needs to guess about or overwrite the other's domain. The
-content server is never wrong about the Future (it owns it); the publish server is
-never wrong about the Present (it owns it); and the only moment they must agree is
-the atomic bridge. (Verified: content edits the Future without touching the publish
-server's Present; the bridge is the only operation that moves a change from sandbox
-to live.) This is the agency invariant realized as an architecture: split authority
-means no part must sacrifice its own correctness for the whole's.
+Present and Future is not one arbitrary way to split authority among several — it is
+*the* split, because partition itself is a temporal phenomenon. A partition is by
+definition a *change* in connectivity: connected at time t₀, disconnected at time
+t₁. If t₀ = t₁ there is no change and therefore no partition; a partition cannot
+exist at a single instant. So the only way a partition can arise is through the
+passage of time — t₀ ≠ t₁ — which means the axis along which authority must be split
+to tolerate partition is *the time axis itself*. Splitting by node, by key, or by
+region is incidental and may or may not align with where a partition falls;
+splitting by Present versus Future is the one split guaranteed to match the
+phenomenon, because time is the medium in which every partition occurs. To tolerate
+partition is to tolerate the passage of time, and the partition that does that
+exactly is Present/Future.
+
+The two halves are asymmetric, and the asymmetry is principled, not incidental:
+
+- The **Present is already consolidated.** It is committed, established state. To
+  *change* it requires a reversible transaction — an atomic, rollback-able
+  operation — precisely because it is settled fact that other things may already
+  depend on. You cannot edit the Present freely; you can only move it by a real,
+  reversible commit.
+- The **Future is pure potential.** The sandboxes are not-yet-real, unconsolidated,
+  free to diverge and be rewritten, because nothing depends on them yet. Changing
+  potential needs no transaction — you simply edit it. Its freedom is exactly that
+  it is not yet committed.
+
+This is why the bridge is the reversible transaction and why it runs in one
+direction: the bridge *consolidates potential into fact*, collapsing a chosen Future
+into the Present via the one operation — a reversible commit — that the Present
+admits. The content server holds pure potential and may rewrite it at will; the
+publish server holds consolidated fact and admits change only through the reversible
+bridge; and the bridge is the moment potential becomes present. Because the
+authorities are split along the only axis a partition can fall on, and the bridge is
+the only operation that crosses settled fact, each server holds its own conserved
+quantity with full integrity and never needs to guess about or overwrite the other's
+domain. (Verified: content edits the Future without touching the publish server's
+Present; the bridge is the only operation that moves a change from sandbox to live.)
+This is the agency invariant realized as an architecture: split authority along the
+time axis means no part must sacrifice its own correctness for the whole's.
 
 The bridge — *publish* — is the only moment both nodes must be momentarily
 deterministic-available together. The protocol (Drupal-Workspaces-shaped):
