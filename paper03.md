@@ -3,18 +3,21 @@
 **Series:** The Isomorphic Scheduler (Axis 03: Focus)
 **Authors:** Fabian Franz & Claude (Team Phi / Isomorphic AI)
 **Status:** draft v3 · toy validated
-**Artifact:** `iso_flow.py` @ commit `dc6ae01`
+**Artifact:** `iso_flow.py` @ commit `b10a01f`
 
-> **TruthSeed (paper):** `iso-sched-03:priority-is-a-rate`
-> Priority is a *rate*, not a stock. Each process is a bucket filled by a stream
-> whose rate is its priority; at every instant the available progress is divided
-> among the processes currently at the table, in proportion to their rates. When
-> a high-priority process is blocked it is simply not at the table, so the others'
-> shares rise automatically to fill the gap — no demotion, no penalty. When it
-> returns, its rate never changed, so it eats at full share immediately — no
-> climb-back, no debt. The allocation at NOW depends only on who is present and
-> their rates: memoryless, and therefore isomorphic. Priority inversion cannot
-> form, because a blocked process holds no claim on the processor to invert.
+> **TruthSeed (paper):** `iso-sched-03:energy-flows-where-attention-goes`
+> Priority is a *rate*, not a stock, and it *flows along the wait-edge*. Each
+> process is a bucket filled by a stream whose rate is its priority; at every
+> instant the available progress is divided among the processes at the table in
+> proportion to their *effective* rates, where `eff(p) = base(p) + Σ eff(w)` over
+> every process `w` blocked on `p`. A blocked process's bucket is closed, so its
+> whole stream pours down the wait-edge into the holder it is attending to: the
+> holder catches exactly the energy of whoever waits on it, the bottleneck
+> illuminates itself, and the blockage clears in proportion to how much the
+> system cares about what is blocked. Energy flows where attention goes. This is
+> memoryless and transitive; priority inheritance falls out as a structural
+> consequence of conservation, not a protocol. The instant the lock releases the
+> pipe breaks and each stream returns to its own bucket — no climb-back, no debt.
 
 ---
 
@@ -30,25 +33,32 @@ fixed number or a depletable stock.
 Picture each process as a bucket filled by a stream; the stream's rate is the
 process's priority (its *focus*). At each instant, the available progress — the
 cake — is divided among the processes **currently at the table** (alive, runnable,
-not blocked) in proportion to their rates. Three behaviours follow with no extra
-mechanism. **When H is away** (blocked, or finished), it takes no share, so the
-cake divides among those present and the others' shares — including the holder
-L's — **rise automatically**. **When H returns**, its rate is unchanged, so it
-**immediately resumes its full share**; there is no penalty to repay and no
-priority to restore, because nothing was spent or stored. And **L is never
-starved**: while at the table with a positive rate it always receives a positive
-share.
+not blocked) in proportion to their rates. But a bare rebalance has a flaw: if H
+blocks and simply leaves, the freed cake spreads to *whoever is present* — including
+an unrelated busy-work task M that has no business eating while H's critical path
+is stalled inside L. The fix is the **flow equation**: a blocked process's rate
+does not merely vacate, it *pours down the wait-edge into the holder it is blocked
+on*. Effective rate is `eff(p) = base(p) + Σ eff(w)` over every `w` blocked on `p`,
+transitively along chains. The holder catches exactly the energy of whoever is
+waiting on it.
 
-This is *memoryless*: the allocation at time NOW is a pure function of who is
-present now and their rates, with no dependence on the history of blocking or
-yielding. That memorylessness is what makes it isomorphic — the schedule is the
-same structure re-evaluated each instant, not a stateful protocol accumulating
-boosts and debts. In the toy, a high process blocks and leaves the table; the
-holder's share rises (and reaches the whole cake when it is the only one present);
-the high process returns and instantly takes its full rate proportion (0.90 of the
-cake against the holder, exactly 9/(9+1)) with zero penalty for ten rounds
-blocked. Priority inversion never forms because a blocked process holds no
-processor claim to be inverted.
+Three behaviours follow with no protocol. **When H blocks on L**, H's stream flows
+into L, so L's effective rate jumps (to base+H) and L — not M — gets the lion's
+share, clears its critical section fast, and releases the lock. **The bottleneck
+illuminates itself**: it receives precisely the power the system's pending
+attention demands. **When H returns**, the pipe breaks, its stream returns to its
+own bucket, and it resumes its full share immediately — no penalty, nothing to
+restore. And **L is never starved**: present demand is always served.
+
+This is *memoryless*: the allocation at time NOW is a pure function of the current
+wait-graph and the rates, with no dependence on the history of blocking. That
+memorylessness is what makes it isomorphic — the schedule is the same structure
+re-evaluated each instant, not a stateful protocol accumulating boosts and debts.
+In the toy, H blocked on L pours its rate into L: L's share rises to 0.77 (exactly
+(1+9)/(1+9+3)) while busy-work M stays pinned at 0.23 — M does *not* feast — and H
+resumes its full share the instant the lock frees, with zero penalty for being
+blocked. Priority inheritance is not implemented; it is what the flow equation
+looks like from outside.
 
 We introduce three invariants for successful systems design:
 
@@ -131,65 +141,95 @@ stream; a low-focus task a thin one. At each instant the scheduler looks at the
 buckets of the tasks **at the table** — runnable right now — and serves progress
 in proportion to their rates. That is the entire scheduler.
 
-Now watch the three things happen with no added rule.
+Now watch what happens when a task blocks. A bare rebalance — just drop the
+blocked task from the division — has a flaw worth naming, because it is the flaw
+the flow equation fixes. If H blocks on L and simply leaves the table, the cake it
+vacated spreads to *whoever is present*. But "whoever is present" may include an
+unrelated busy-work task M that is merely hashing strings in a loop. M has no
+business eating the freed share while H's critical path is stalled inside L's
+critical section. The blockage is at L, and the freed energy should go to L — not
+to whatever else happens to be at the table.
 
-- **A task leaves the table** (it blocks on a held lock, or finishes). It is no
-  longer served. The cake that instant divides among those still present, so their
-  shares **rise automatically** — the holder L, present and runnable, gets a larger
-  slice precisely because the high task H is not competing. No one demoted H; H
-  removed itself from the division by being unable to eat, and the proportion
-  rebalanced. When L is the only one left at the table, L gets the whole cake.
-- **A task returns to the table** (its lock frees). Its stream never stopped, its
-  rate is unchanged, so the instant it is runnable again it takes its full
-  rate-proportion of the cake — **immediately**, with no penalty. There is no debt
-  to repay (nothing was spent) and no priority to restore (nothing was changed).
-  The high task, blocked for many rounds, resumes at exactly the share its rate
-  dictates against whoever is now present.
-- **No task starves.** As long as a task is at the table with a positive rate it
-  gets a positive share every instant. A small minimum-rate floor guards against a
-  degenerate (zero) rate, but the basic guarantee is structural: present demand is
-  always served.
+So the rule is not "drop the blocked task and rebalance." It is: **a blocked
+task's stream pours down its wait-edge into the holder it is blocked on.** H is
+attending to L (it needs the lock L holds), so H's energy flows to L. Concretely,
+define a process's **effective rate** as its own base rate plus the rate flowing
+in from everyone blocked on it, transitively along the chain of wait-edges:
 
-The wrong framing was "a blocked high task keeps its priority claim, which we must
-transfer to the holder." The right framing: **a blocked task is simply not at the
-table, so it holds no claim and the division rebalances to those who can eat.**
-Priority is a rate, the schedule is the instantaneous proportion of present
-demand, and it is memoryless — the state at NOW depends only on who is present now
-and their rates. That memorylessness is exactly what makes the scheduler
-isomorphic: the same structure re-read each instant, never a stateful accumulation
-of boosts and debts.
+> `eff(p) = base(p) + Σ eff(w)` over every `w` currently blocked on `p`.
+
+Then the cake is divided by *effective* rate over the tasks at the table. When H
+(rate 9) blocks on L (rate 1), L's effective rate becomes 10, and the cake divides
+between L (10) and M (3): **L gets 10/13 ≈ 77%**, finishes its critical section
+fast, and releases the lock. M, the busy-work task, stays at its own 3/13 ≈ 23% —
+it does not feast. The bottleneck illuminated itself: L received precisely the
+power the system's pending attention demanded, in proportion to how much the
+system cares about what is blocked (here, a rate-9 task cares a lot).
+
+This is the literal mechanism of a phrase that turns out to be exact rather than
+metaphorical: **energy flows where attention goes.** Attention is the dependency
+(H is focused on the lock L holds); energy is the rate (H's stream); flows is the
+routing (because H's attention is fixed on L, H's energy pours into L's bucket).
+The scheduler never decides to "boost" L. L simply *catches* the energy of the
+processes whose attention is fixed upon it.
+
+And it stays memoryless. The instant L releases the lock, the wait-edge vanishes,
+the pipe breaks, and H's stream pours back into H's own bucket — H is at the table
+again at its full rate, immediately, with no penalty to repay and nothing to
+restore. The allocation at any instant is a pure function of the current
+wait-graph and the rates. That is what makes it isomorphic: the same structure
+re-read each instant, never a stateful protocol of boosts and reverts.
+
+The wrong framing was "a blocked high task keeps a priority claim we must transfer
+to the holder via a protocol." The right framing: **the blocked task's rate is a
+fluid that flows down the wait-edge into the holder, automatically, by
+conservation.** Priority inheritance is not implemented; it is what this flow
+looks like from outside.
 
 ---
 
 ## 4. The solution
 
-### 4.1 Rate-proportional instantaneous share `(structural)`
+### 4.1 The flow equation and instantaneous effective-rate share `(structural)`
 
-Each process has a fixed `rate` (its priority / focus). Each scheduling instant
-distributes a fixed capacity `C` of progress:
+Each process has a fixed base `rate` (its priority / focus). Its **effective
+rate** at an instant is its base rate plus the rate flowing in from everyone
+blocked on it, transitively:
 
-> **Flow rule.** Let `T` be the set of processes *at the table* — alive, not done,
-> and runnable now (next step is not a blocked acquire). Each `p ∈ T` receives
-> `share(p) = C · rate(p) / Σ_{q ∈ T} rate(q)`. Processes not at the table receive
-> nothing. Shares accumulate; a whole accumulated unit is one step.
+> **Flow equation.** `eff(p) = base(p) + Σ_{w blocked on p} eff(w)`. A process `w`
+> is "blocked on `p`" when `w`'s next step is to acquire a lock currently held by
+> `p`. The recursion follows the chain of wait-edges and terminates on the DAG of
+> waits; a cycle (deadlock) returns zero inflow and is handled by the
+> detection/resolution machinery, not here.
 
-`T` is recomputed every instant, so the denominator shrinks the moment a task
-leaves and grows when one returns. A small floor `rate(p) ← max(rate(p),
-ε)` guards degenerate rates; the anti-starvation property otherwise follows from
-"present demand is always in the denominator and so always served."
+Each scheduling instant distributes a fixed capacity `C` of progress:
 
-### 4.2 Why inversion cannot form `(structural)`
+> **Share rule.** Let `T` be the set of processes at the table — alive, not done,
+> runnable now. Each `p ∈ T` receives `share(p) = C · eff(p) / Σ_{q ∈ T} eff(q)`.
+> A blocked process is not in `T`; its rate has already flowed into its holder's
+> `eff`, so it is counted there, not separately.
+
+`T` and every `eff` are recomputed each instant from the live wait-graph, so the
+flow appears the moment a block forms and vanishes the moment it clears. A small
+floor `rate(p) ← max(rate(p), ε)` guards degenerate rates.
+
+### 4.2 Why inversion cannot form, and the bottleneck self-powers `(structural)`
 
 In the classical model a blocked high task retains a top-priority claim that the
 scheduler must honour, which is what lets it block the holder's progress
-indirectly. Here a blocked task is **not in `T`** — it has no share at all while
-blocked. So it cannot, by holding an idle claim, deprive the holder of the
-processor: the holder is in `T`, the blocked task is not, and the division serves
-the holder. The medium task M and the holder L split the cake by their rates; L
-runs and releases the lock; the high task H rejoins `T` and resumes. There is no
-instant at which H's idle claim prevents L from running, because H has no claim
-while blocked. Inversion is not detected-and-patched; it is *structurally absent*.
-`(structural)`
+indirectly. Here a blocked task is not in `T` — instead, **its rate has flowed
+into the holder it waits on.** So not only does the blocked task hold no idle
+claim to invert; the holder is *actively powered* by exactly that claim. When H
+(rate 9) blocks on L (rate 1), L's effective rate is 10, so L dominates the
+division against any unrelated task M (rate 3): L gets 10/13, M gets 3/13. The
+unrelated busy-work task cannot feast on the freed capacity, because the freed
+capacity did not spread to the table at large — it was routed down the wait-edge to
+the one process whose progress unblocks H. The bottleneck self-powers: it receives
+precisely the energy of the pending attention upon it. L runs, releases, H rejoins
+`T`. There is no instant at which an unrelated task starves the holder, because the
+holder carries the blocked tasks' rates. Inversion is not detected-and-patched; it
+is *structurally absent*, and the holder is *accelerated* in proportion to what
+waits on it. `(structural)`
 
 ### 4.3 Memorylessness, stated precisely `(shown)`
 
@@ -198,10 +238,11 @@ which tasks are at the table now and their fixed rates. It does not depend on ho
 long any task was blocked, how many times it yielded, or what it did before. We
 verify the consequence that matters: a task returning from a long block resumes at
 exactly the share its rate dictates against the currently-present tasks, identical
-to what it would get had it never blocked. In the toy, H returns after ten rounds
-blocked and immediately receives 0.90 of the cake against L — exactly `9/(9+1)`,
-its uncontested rate proportion — with no penalty. `(shown)` This is the precise
-content of "no climb-back, no debt": memorylessness makes return free.
+to what it would get had it never blocked. In the toy, H returns from being
+blocked and immediately receives its full effective-rate share again — the instant
+the lock frees, the pipe breaks, H's stream returns to its own bucket, and H is
+back at the table at rate 9 with no penalty. `(shown)` This is the precise content
+of "no climb-back, no debt": memorylessness makes return free.
 
 ### 4.4 The three invariants, in full
 
@@ -283,30 +324,38 @@ The per-round instantaneous shares show every claim directly:
 
 | Phase | Rounds | L share | H share | M share | What it shows |
 |---|---|---|---|---|---|
-| All present | 1–3 | 0.08 | 0.69 | 0.23 | H (rate 9) dominates by its rate; L and M get their proportions |
-| H blocked (away) | 4–11 | 0.25 | **0.00** | 0.75 | H leaves the table; L's share **rises 0.08→0.25**, M's to 0.75 — automatic rebalance |
-| Only L present | 12–13 | **1.00** | 0.00 | 0.00 | M done, H blocked: L gets the whole cake |
-| H returns | 14–18 | 0.10 | **0.90** | 0.00 | H back at full rate **immediately** — 0.90 = 9/(9+1) against L, no climb-back |
-| Finish | 19–21 | 1.00 | 0.00 | — | L completes its tail |
+| All present | 1–3 | 0.08 | 0.69 | 0.23 | H (rate 9) dominates by its rate; L and M get their base proportions |
+| H blocked → flows into L | 4–8 | **0.77** | **0.00** | 0.23 | H's rate-9 stream pours down the wait-edge into L: L's effective rate = 1+9 = 10, share 10/13; **M stays at 0.23 — does not feast** |
+| H returns | 9–14 | 0.08 | **0.69** | 0.23 | pipe breaks; H resumes its full share immediately, no penalty |
+| Only L & M (H done) | 15–18 | 0.25 | 0.00 | 0.75 | H finished (not blocked): the table is L+M at their base rates |
+| Finish | 19–20 | 1.00 | 0.00 | — | L completes its tail |
+
+The decisive contrast is the blocked phase: with the flow equation L gets **0.77**
+and M stays at **0.23**; with a bare rebalance (no flow, the freed share spread to
+the table) L would get only 0.25 and the busy-work task M would feast at 0.75. The
+flow routes H's energy to the bottleneck (L), not to the bystander (M).
 
 Claims, all confirmed:
 
-- **L's share rises automatically when H is away.** 0.08 → 0.25 the instant H
-  blocks, and 1.00 when L is the only one present. No demotion of H; the division
-  simply rebalanced over the runnable set. `(shown)`
+- **L catches H's flow; M does not feast.** While H is blocked on L, L's share is
+  0.77 (= (1+9)/(1+9+3)) and the unrelated busy-work task M stays at 0.23. H's
+  rate flowed down the wait-edge into L, powering the bottleneck, not the
+  bystander. A bare rebalance would instead give M 0.75 — the flaw the flow
+  equation fixes. `(shown)`
 - **L is never starved.** L has a positive share every round of the blocked
-  window and never stalls. `(shown)`
-- **H eats immediately on return.** At round 14 H resumes at 0.90 — exactly its
-  uncontested rate proportion against L — with zero penalty for ten rounds
-  blocked. Memoryless: return is free. `(shown)`
+  window. `(shown)`
+- **H eats immediately on return.** The instant the lock frees, the pipe breaks
+  and H resumes its full share with zero penalty for being blocked. Memoryless:
+  return is free. `(shown)`
 - **System completes**, all three finishing their work. `(shown)`
 
 ### 6.2 Memorylessness check `(shown)`
 
-H's share when it returns (round 14, against L only) is 0.900, exactly `9/(9+1)`,
-its uncontested rate proportion — identical to what its rate would earn had it
-never blocked. The block left no trace in the allocation. This is the operational
-meaning of memoryless and of "no climb-back, no debt." `(shown)`
+When H returns from being blocked, it immediately receives its full effective-rate
+share again (rate 9, the pipe to L having broken), identical to what its rate earns
+had it never blocked. The block left no trace in the allocation: no penalty, no
+pass-debt, nothing to restore. This is the operational meaning of memoryless and of
+"no climb-back, no debt." `(shown)`
 
 ### 6.3 Practical exam pointer
 
@@ -321,11 +370,23 @@ lock wait regains its full weight immediately. A failure there is the next seed.
 
 ## 7. Further work (deeper into this wave)
 
-- **Rate as the conserved budget.** This paper's rate, Paper 01's detection floor,
-  and Paper 02's resolution credit are all the one shared quantity. Capstone
-  question: is "rate" simply the *flow* and "budget/credit" the *accumulated
-  stock* of one conserved quantity, so that detection, resolution, and scheduling
-  are stock-and-flow readings of a single thing?
+- **The capstone synthesis: one conserved quantity, integral and derivative.**
+  The three papers are three readings of a single conserved quantity, related as
+  calculus relates a flow to its accumulation:
+    - *Detection (Paper 01)* watches the **integral** of the flow — budget is the
+      accumulated quantity, and a deadlock is its floor, the integral hitting zero.
+    - *Resolution (Paper 02)* banks the **integral across a yield** — credit is
+      accumulated progress carried forward, conserved rather than discarded.
+    - *Scheduling (Paper 03)* routes the **instantaneous flow** itself — rate is
+      the derivative, the fluid that pours along dependency edges right now.
+  The same fluid, integrated, is the budget whose floor detects deadlock and whose
+  banking is resolution credit; differentiated, it is the rate that flows down the
+  wait-edge as inheritance. The capstone question is whether a single engine that
+  maintains only this one quantity — tracking its flow and its accumulation —
+  yields detection, resolution, and inversion-freedom together, with each classical
+  mechanism falling out as a reading of the conserved quantity rather than a
+  subsystem. Priority inheritance, like deadlock detection and resolution before
+  it, falls out for free as a structural consequence of conservation.
 - **Blocking bound under rate share.** Classical inheritance has a proven
   worst-case blocking bound. Does rate-proportional share admit an analogous bound
   on how long a high task waits, as a function of the holder's rate and
@@ -361,18 +422,27 @@ allocation at any instant depends only on who is present and their rates:
 memoryless, and therefore isomorphic — the same structure re-read each instant
 rather than a protocol accumulating boosts and debts.
 
-The toy shows every piece directly in the instantaneous shares: the holder's slice
-rising from 0.08 to 0.25 to 1.00 as the high task leaves and the table empties, and
-the high task resuming at exactly 0.90 — its uncontested rate proportion — the
-instant it returns from ten rounds blocked, paying nothing. We set the rates, the
-focus, and the system self-organises: who eats how much is always just the
-proportion of present demand. This is the focus axis of the series, and it joins
-the others under one conserved quantity — the same stream that, accumulated, is the
-budget whose floor detects deadlock and whose banking is resolution credit.
-Hoarding a claim on the processor while unable to use it is the fiction the
-classical model must patch; letting the claim be a live rate, served only when one
-is at the table, frees the whole. The focused schedule and the fair schedule are
-the same schedule.
+The toy shows every piece directly in the instantaneous shares: when H blocks on
+L, its rate-9 stream pours down the wait-edge into L, whose share rises to 0.77
+while the unrelated busy-work task M stays pinned at 0.23 — the energy reaches the
+bottleneck, not the bystander — and H resumes its full share the instant the lock
+frees, paying nothing for having been blocked. We set the rates, the focus, and the
+system self-organises: who eats how much is always the proportion of present
+*effective* demand, with each blocked task's attention routing its energy to the
+holder it depends on.
+
+This is the literal content of a phrase that is mechanism, not metaphor: **energy
+flows where attention goes.** Attention is the dependency, energy is the rate, flow
+is the routing along the wait-edge. The holder does not get boosted by a protocol;
+it catches the energy of the processes whose attention is fixed upon it, and the
+bottleneck illuminates itself, receiving exactly the power required to clear in
+proportion to how much the system cares about what is blocked. The architecture is
+self-healing. And it joins the others under one conserved quantity: the same fluid
+that, accumulated, is the budget whose floor detects deadlock and whose banking is
+resolution credit, here flows as the rate that routes inheritance for free.
+Priority inheritance, like detection and resolution before it, is not a subsystem —
+it is a structural consequence of conservation. The focused schedule and the fair
+schedule are the same schedule.
 
 ---
 
@@ -395,7 +465,7 @@ the same schedule.
 
 ## Appendix A — Reproducibility
 
-- Artifact: `iso_flow.py`, committed at `dc6ae01` (Team Phi).
+- Artifact: `iso_flow.py`, committed at `b10a01f` (Team Phi).
 - Run: `python3 iso_flow.py` — prints the per-round instantaneous shares, the
   return-immediacy and memorylessness checks, and a verdict ending in
   `ALL CLAIMS HELD: True`.
@@ -407,16 +477,22 @@ the same schedule.
 ## Appendix B — The scheduler in one screen
 
 ```
+eff(p):                                  # THE FLOW EQUATION
+    return base_rate(p) + sum( eff(w) for w blocked-on p )   # energy flows in
+                                          # from everyone attending to p
+
 each instant:                            # priority = rate; no stock, no memory
     T = { p : alive, not done, runnable now (next step not a blocked acquire) }
-    R = sum( rate(p) for p in T )
+    R = sum( eff(q) for q in T )
     for p in T:
-        share(p) = C * rate(p) / R       # instantaneous proportion of present demand
+        share(p) = C * eff(p) / R         # instantaneous proportion of effective demand
         acc(p)  += share(p)
         while acc(p) >= 1: acc(p) -= 1; do one step of p
 
-# A blocked task is not in T -> it holds no share -> it cannot strand the holder
-# -> inversion cannot form. When it leaves, R shrinks and everyone present rises.
-# When it returns, R grows and it resumes at full rate share at once -- no debt,
-# no restore. The allocation depends only on (T, rates): memoryless. No clock.
+# A blocked task is not in T; its rate has flowed down the wait-edge into its
+# holder's eff, so the holder catches its energy and clears the blockage -- the
+# bottleneck self-powers, unrelated tasks do not feast. The instant the lock
+# frees, the wait-edge vanishes and the stream returns to its own bucket: no
+# climb-back, no debt. Allocation depends only on (wait-graph, rates): memoryless.
+# Energy flows where attention goes. No clock.
 ```
