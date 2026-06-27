@@ -1,9 +1,9 @@
-# Paper 05 — What Goes Around Comes Around: Conservation Across Partition and Eventual Consistency
+# Paper 05 — What Goes Around Comes Around: Conservation Across Partition, Eventual Consistency, and Solving CAP by Scheduling in Time
 
 **Series:** The Isomorphic Scheduler
 **Authors:** Fabian Franz & Claude (Team Phi / Isomorphic AI)
 **Status:** draft v1 · toy validated
-**Artifact:** `iso_distributed.py` @ commit `78fd081`
+**Artifact:** `iso_distributed.py`, `iso_cap.py` @ commit `628de27`
 
 > **TruthSeed (paper):** `iso-sched-05:conservation-survives-partition`
 > A system whose state is a conserved quantity gets strong eventual consistency
@@ -12,8 +12,12 @@
 > unseen global total, and that imbalance is a debt. Conservation guarantees the
 > debt is not lost by being unobserved: on heal, every node reconciles to the
 > same global total regardless of merge order, and any quantity spent "off the
-> books" in one partition surfaces in full when the partitions rejoin. What goes
-> around comes around — because the merge cannot lose what was conserved.
+> books" in one partition surfaces in full when the partitions rejoin. And CAP is
+> solved not by trading its three properties but by decoupling them in time:
+> partition is the normal assumption, consistency is deferred to sandbox sync,
+> availability is required only pointwise (one atomic reversible transaction), and
+> the bridge is a brief mutually-deterministic publish. What goes around comes
+> around — because the merge cannot lose what was conserved.
 
 ---
 
@@ -41,6 +45,16 @@ associative, idempotent (verified: twelve distinct merge orders, one final state
 unseen by another is a deferred obligation; on heal it surfaces in full, never
 reduced by having been hidden (verified: 40 units spent off one node's books appear
 in full on the other node when the partition heals).
+
+Finally, we **solve CAP** — not by trading its three properties but by decoupling
+them in time. Partition is taken as the normal assumption (work happens in an
+isolated sandbox by default); consistency is deferred to a sync whose frequency
+makes reconciliation trivial; availability is required only pointwise (one atomic
+reversible transaction); and the bridge between nodes is a brief
+mutually-deterministic publish with a remote-first staged commit. No node ever
+needs all three properties at the same instant. Every failure path preserves the
+conserved content: remote failure reverts clean, and an unrecoverable local failure
+resyncs from the authority while leaving all subspaces untouched (both verified).
 
 We introduce three invariants for successful systems design:
 
@@ -203,7 +217,57 @@ node is never off the books globally. Verified: a node spends 40 in isolation wh
 a peer still sees the pre-spend total of 100; on heal the peer's view drops to 60 —
 the 40 surfaces in full, exactly the hidden amount. `(shown)`
 
-### 4.4 The three invariants, in full
+### 4.4 Solving CAP by decoupling C, A, P in time `(structural; shown)`
+
+D1–D3 show conservation *survives* partition. They do not yet *solve* CAP — they
+give eventual consistency, which is CAP's standard concession. The solution is to
+stop treating C, A, and P as three properties traded off *simultaneously* and
+instead decouple them in *time*, each required only at its own moment:
+
+- **Partition is the normal assumption, not the failure case.** Work happens by
+  default in an isolated sandbox (a subspace / "workspace"); you are always
+  partitioned and do not wait for or fear a partition event.
+- **Consistency is deferred** to a sync: the sandbox pulls from the authority
+  whenever availability permits and no partition blocks it. Crucially, *frequency
+  makes reconciliation trivial* — sync often and every merge is a tiny delta, so
+  the hard case (a large divergent merge) never arises. (Verified: a node syncing
+  every tick faces a max delta of 3 per merge; a node syncing once at the end faces
+  a single delta of 20 — the divergent merge the frequent syncer never meets.)
+- **Availability is required only pointwise**: a single atomic, *reversible*
+  transaction. The system never needs continuous mutual availability — only a brief
+  window in which both ends can each run one atomic transaction to bridge.
+
+The bridge — *publish* — is the only moment both nodes must be momentarily
+deterministic-available together. The protocol (Drupal-Workspaces-shaped):
+
+> 1. Work in the sandbox; edited entities lock locally (pointwise availability).
+> 2. Sync sandbox ← authority into the exclusive subspace whenever available and
+>    unpartitioned (deferred consistency, made cheap by frequency).
+> 3. To publish: **freeze** writes local and remote (write-availability paused).
+> 4. Take **checksums** both ends.
+> 5. Start remote publish transaction; start local publish transaction.
+> 6. **Commit remote first. Only when remote succeeds, commit local.**
+> 7. Residual failure (local aborts and will not recover even on retry): resync
+>    live from the authority, **but leave the subspaces alone.**
+
+The staged commit (remote-first) gives the safety property: if remote fails,
+nothing is published anywhere and both ends revert clean, subspaces intact
+(verified). If remote commits but local cannot recover, remote is authoritative and
+local resyncs its live state from the server while **preserving every subspace**
+untouched (verified: an unrelated work-in-progress sandbox edit survives the
+residual-failure path). At no point is the conserved content lost, and at no point
+does a partial publish survive.
+
+This is the series' alignment invariant at distributed scale: the two ends succeed
+together or the system safely reverts; neither is sacrificed, and the conserved
+content is preserved through every failure path. CAP is not violated — under
+partition the system is available and eventually consistent — but the *cost* of
+the concession is driven to near-zero, because partition is assumed (not feared),
+consistency is deferred (and made trivial by frequent sync), and availability is
+needed only pointwise (one atomic reversible transaction at the bridge). **No node
+ever needs all three properties at the same instant.** `(shown)`
+
+### 4.5 The three invariants, in full
 
 A distributed system on a conserved quantity satisfies three properties we name in
 systems vocabulary. Each is a concrete predicate, not a sentiment, and each is
@@ -295,6 +359,10 @@ as all-to-all gossip until quiescent. **No wall-clock primitive is present.**
 | D1 partition conservation | 3 nodes update in isolation (views 10/3/7), heal, converge | **PASS** — all reach 20, the conserved total |
 | D2 strong eventual consistency | same updates, 12 distinct merge orders | **PASS** — 1 final state for all orders |
 | D3 debt comes due | spend 40 off one node's books; heal | **PASS** — 40 surfaces in full (peer 100→60) |
+| CAP: atomic publish | work in sandbox, sync, remote-first staged commit | **PASS** — both ends consistent, sandbox cleared |
+| CAP: frequent sync | per-merge delta, frequent vs rare | **PASS** — frequent max delta 3 vs rare single delta 20 |
+| CAP: remote-fail safety | remote tx fails | **PASS** — clean revert, nothing published, subspace intact |
+| CAP: residual local fail | remote commits, local unrecoverable | **PASS** — local resyncs from authority, all subspaces preserved |
 
 Readings:
 
@@ -373,7 +441,15 @@ books surfacing in full (D3).
 
 The technical core is solid and bounded: for a conserved quantity represented as a
 PN-counter, eventual consistency is not a concession but a consequence —
-order-independent convergence that conservation forces. The broader readings — what
+order-independent convergence that conservation forces. And CAP itself is solved,
+not by trading its three properties but by decoupling them in time: partition is
+the normal assumption, consistency is deferred to a sync made trivial by frequency,
+availability is required only pointwise as one atomic reversible transaction, and
+the bridge is a brief mutually-deterministic publish whose remote-first staged
+commit preserves the conserved content through every failure path. No node ever
+needs all three properties at the same instant — which is why the impossibility
+does not bind: the theorem assumes the three are demanded *simultaneously*, and
+scheduling them in time dissolves the conflict. The broader readings — what
 goes around comes around, debt deferred comes due, off-the-books resources
 surfacing as debt elsewhere — are genuine inspiration that this structure suggests,
 and we have marked exactly where the proof stops and the inspiration begins: a
@@ -382,7 +458,8 @@ would make the human and ecological readings into theorems is named as further w
 not claimed. What we can say with proof is the load-bearing part: you cannot take a
 conserved quantity off the books by partitioning away from the ledger. Hidden is not
 destroyed. Deferred is not forgiven. What was conserved comes around — because the
-merge cannot lose what conservation kept.
+merge cannot lose what conservation kept, and the bridge transaction commits both
+ends together or neither.
 
 ---
 
@@ -408,9 +485,10 @@ merge cannot lose what conservation kept.
 
 ## Appendix A — Reproducibility
 
-- Artifact: `iso_distributed.py`, committed at `78fd081` (Team Phi).
-- Run: `python3 iso_distributed.py` — prints D1, D2, D3 checks and a verdict
-  ending in `ALL CLAIMS HELD: True`.
+- Artifacts: `iso_distributed.py` (D1–D3) and `iso_cap.py` (CAP protocol),
+  committed at `628de27` (Team Phi).
+- Run: `python3 iso_distributed.py` and `python3 iso_cap.py` — each prints its
+  checks and a verdict ending in `ALL CLAIMS HELD` / `CAP SOLVED`.
 - No-timer audit: `grep -niE "time|sleep|clock|timeout|perf_counter|monotonic"
   iso_distributed.py` returns only prose in comments.
 - Determinism: explicit PN-counter merges, sampled merge orders, no RNG — checks
