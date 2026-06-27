@@ -20,9 +20,9 @@ principle.
 
 ---
 
-## PART A — THE FLOW-EQUATION SCHEDULER
+## PART A — THE FLOW-EQUATION SCHEDULER (REPLACE THE FAIR SCHEDULER)
 
-### A0. What we are porting
+### A0. What we are porting, and the actual goal
 
 The toy (`iso_flow.py`) schedules by *effective rate*: each instant, runnable tasks
 split the CPU in proportion to `eff(p) = base_rate(p) + Σ eff(w)` over every task
@@ -33,49 +33,104 @@ effective share jumps; an unrelated busy task does NOT feast); the holder clears
 its critical section fast; the instant the lock frees the flow reverts with no
 penalty (memoryless). Priority inversion is structurally absent.
 
-This is, in effect, **priority inheritance expressed as a weight flow** rather than
-as a boost-and-restore protocol. Linux already has priority inheritance for
-`rt_mutex` (PI futexes); the exam's novelty is expressing it as a conserved-weight
-flow on the *fair* scheduler's weights, computed from the wait-graph, with no
-stored boost to restore.
+**The goal is replacement, not addition.** This exam does NOT add a `SCHED_FLOW`
+class beside CFS/EEVDF, and does NOT merely tweak a few weights inside the existing
+fair scheduler. The goal is to make the flow equation *the* fair scheduler — the
+policy that `SCHED_NORMAL`/`SCHED_BATCH` tasks (the vast majority of every Linux
+system) actually run under. Effective weight, computed from the live wait-graph, is
+the weight the fair-share engine uses, everywhere, by default. When this is done,
+"priority inheritance" is not a feature the kernel offers; it is simply how the
+scheduler weights tasks, and the PI-futex special case becomes redundant for the
+fair class because the general flow already does it.
 
-### A1. Where it lands in the kernel
+A `SCHED_FLOW` class or a thin weight-modifier is acceptable ONLY as a stepping
+stone for the pre-check (A1), to validate the mechanism cheaply before committing
+to the replacement. The deliverable is the replacement.
 
-Two viable implementation targets — pick based on effort/fidelity tradeoff:
+### A1. Pre-check first (cheap validation), then replace
 
-**Option 1 (recommended first): a CFS/EEVDF weight modifier.**
-Linux's fair scheduler (CFS, now EEVDF in 6.6+) already does weighted
-proportional share: each task has a weight derived from nice value, and CPU is
-shared in proportion to weight. The flow equation maps cleanly:
-- `base_rate(p)` ↔ the task's nice-derived weight.
-- `eff(p)` ↔ an *effective weight* = own weight + Σ effective weight of tasks
-  blocked on a lock `p` holds.
-- Implement by, when a task blocks on a kernel mutex/futex, adding its effective
-  weight to the holder's effective weight (transitively), and removing it on
-  release. Feed effective weight into the EEVDF/CFS share calculation instead of
-  the static weight.
-- This is close to PI-futex mechanics but applied to fair-share weights and
-  computed from the wait-graph rather than stored per-mutex.
+**Stage 0 — pre-check (allowed shortcut, throwaway).** To de-risk before touching
+the fair scheduler's core, first validate the flow mechanism the cheap way: a small
+hook that, on a kernel mutex/futex block, adds the waiter's effective weight to the
+holder and feeds it into the existing share calc. Run the A3 microbenchmark. If the
+inversion collapses as predicted, the mechanism is sound and we proceed to
+replacement. This stage is a throwaway probe, not the deliverable — do not polish
+it.
 
-**Option 2 (deeper, more invasive): a new `sched_class`.**
-A standalone scheduling class `SCHED_FLOW` that maintains the wait-graph and does
-the instantaneous rate-proportional split directly. More faithful to the toy, far
-more work, and must interoperate with the existing classes. Treat as stretch.
+**Stage 1 — replace the fair scheduler's weight with effective weight.** Make
+effective weight the weight CFS/EEVDF uses, structurally:
+- The fair scheduler (EEVDF in 6.6+, CFS before) computes each entity's CPU share /
+  lag / vruntime from `load.weight` (derived from nice). Replace the *source* of
+  that weight: an entity's scheduling weight becomes its **effective weight** =
+  own nice-weight + Σ effective weight of all tasks currently blocked on a resource
+  this entity holds, transitively over the wait-graph.
+- This is not a per-mutex stored boost (that is classical PI). It is a property
+  recomputed from the wait-graph: the weight a task is scheduled with at any instant
+  is a pure function of the current wait-graph and the nice-weights. Memoryless: no
+  stored boost to restore on release; when the edge disappears the weight
+  recomputes.
+- Every `SCHED_NORMAL` task is scheduled this way. The default behavior of the
+  system changes: weight flows along dependency edges for all fair tasks.
 
-Start with Option 1. The hook points:
-- `__mutex_lock` / `rt_mutex` slow path, and the futex wait path: on enqueue to a
-  wait, record the wait-edge (waiter → owner) and propagate effective weight up the
-  chain (mirror `rt_mutex_adjust_prio_chain`, but summing weights, not taking max).
-- lock release / wake: tear down the edge, recompute effective weight (just drop
-  the waiter's contribution — memoryless, nothing stored to "restore").
-- `update_curr` / place_entity: use effective weight in the share/vruntime
-  calculation.
+### A2. Where it lands in the kernel (replacement)
 
-**Key difference from classical PI to preserve:** classical PI takes the *max*
-priority along the chain. The flow equation *sums* effective rates. Implement the
-sum (that is the conserved-flow semantics: the holder catches the *total* energy of
-everyone waiting on it, not just the most urgent). Document the divergence and
-measure both if feasible.
+The fair scheduler is `kernel/sched/fair.c`; weights live in `struct load_weight`
+on each `struct sched_entity`, set from nice via `set_load_weight()` and consumed
+throughout EEVDF/CFS (`update_curr`, `place_entity`, vruntime/lag, `calc_delta_fair`,
+group shares in `calc_group_shares`).
+
+The replacement touches three things:
+
+1. **The wait-graph.** Maintain, per runqueue (and cross-CPU where a holder runs
+   elsewhere), the edges "task W is blocked on a lock held by task O." Hook the
+   block/wake paths: `__mutex_lock` slow path, rwsem, futex wait
+   (`futex_wait_queue`), and the rt_mutex chain. On block, add edge W→O and
+   propagate W's effective weight up the chain to O (and O's holders, transitively).
+   On wake/release, remove the edge and recompute. This is structurally similar to
+   `rt_mutex_adjust_prio_chain`, but it (a) **sums** weights instead of taking the
+   max priority, and (b) applies to the **fair** class, not just rt_mutex.
+
+2. **The weight source.** Introduce `effective_weight(se)` and route the fair
+   scheduler's weight reads through it. Cleanest: keep `load.weight` as the base
+   (nice-derived) and add `eff_weight` updated by the wait-graph propagation;
+   change the consumers in `fair.c` to use `eff_weight`. Audit every site that
+   reads `se->load.weight` for share/vruntime/lag and decide per site whether it
+   should see base or effective (mostly effective; group accounting needs care).
+
+3. **EEVDF lag/eligibility.** EEVDF computes lag and eligibility from weight.
+   Effective weight changes a task's deserved share mid-flight when it catches
+   flow; ensure lag accounting stays consistent when weight jumps up (holder
+   catches a waiter) and down (lock released). This is the subtle part — a weight
+   that changes at block/release time must not corrupt the EEVDF invariants
+   (zero-lag sum, eligibility). Document how you keep the lag books balanced when
+   effective weight changes; this is the conservation law (Paper 04, L1) showing up
+   as "weight moved between entities must balance."
+
+**Key semantic to preserve (sum, not max).** Classical PI takes the max priority
+along the chain. The flow equation SUMS effective weights: a holder with three
+high-weight waiters catches all three weights, not just the largest. This is the
+conserved-flow semantics and the intended divergence from classical PI. Implement
+the sum; the EEVDF lag bookkeeping above must balance against this sum.
+
+### A2b. Risks specific to replacement (read before starting)
+
+- **Every fair task is affected**, so a bug is a system-wide scheduling bug, not a
+  contained class. Test on UML/VM only; never the dev host.
+- **Group scheduling / cgroups.** `calc_group_shares` distributes a group's weight
+  among its entities. Decide how effective weight composes with group shares
+  (does a blocked task's flow cross the cgroup boundary to its holder in another
+  group? Probably it must, since the dependency is real — but this has fairness and
+  isolation implications worth measuring).
+- **Cross-CPU wait-edges.** Holder may run on another CPU than the waiter. The
+  propagation must reach the holder's runqueue (rq-lock ordering care, like the
+  rt_mutex chain walk across CPUs).
+- **Propagation cost.** A deep or wide wait-graph makes the transitive sum
+  expensive on every block/wake. Bound it (cap chain depth like the rt_mutex chain
+  limit, or memoize). Measure the overhead; this is a real cost the pre-check's
+  toy did not have.
+- **EEVDF invariants.** The hardest part. A live weight change must preserve the
+  scheduler's lag/eligibility invariants or fairness silently breaks. Budget most
+  of the effort here.
 
 ### A2. Test harness — UML first, then containers
 
@@ -107,26 +162,37 @@ Metrics to collect (per scheduler config):
   share drops and LOW's rises, matching the toy's 0.77/0.23 split.
 - **Throughput / completion time** of HIGH.
 
-Compare four configs: (a) stock CFS no PI, (b) stock + PI-futex, (c) flow scheduler
-(sum), (d) flow scheduler (max, to compare against classical PI). Expected: (c) and
-(d) both bound HIGH's blocking and stop MED feasting; (c) routes the *total* waiter
-weight (more aggressive holder boost when many wait).
+Compare configs: (a) stock CFS/EEVDF no PI, (b) stock + PI-futex, (c) the
+**replaced fair scheduler** (effective weight, sum semantics), (d) optionally a max
+variant to compare against classical PI. Expected: (c) bounds HIGH's blocking and
+stops MED feasting *for ordinary `SCHED_NORMAL` tasks with no special API*, because
+the fair scheduler itself now flows weight along wait-edges.
 
 Instrument with ftrace / sched tracepoints and/or bpftrace; record the wait-edge
-propagation events.
+propagation events and the effective-weight changes.
 
 ### A4. Acceptance criteria (Part A)
 
-1. Patched kernel builds and boots under UML.
-2. Inversion microbenchmark shows: under flow, HIGH's blocking time is bounded and
-   MED's share collapses while HIGH is blocked (LOW catches the flow) — versus
-   stock CFS where MED feasts and HIGH's blocking is unbounded.
-3. The flow reverts on release with no residual boost (verify: after S is freed,
-   LOW's effective weight returns to its base — memoryless, nothing "restored"
-   because nothing was stored).
-4. Same behavior holds inside a container on the patched kernel.
-5. A `FINDINGS.md`: what broke, what the wait-graph propagation cost in practice,
-   and whether sum-vs-max materially changed outcomes.
+1. **The fair scheduler is replaced**, not extended: `SCHED_NORMAL` tasks are
+   scheduled by effective weight (own nice-weight + summed flow from blocked
+   waiters) by default, with no opt-in API and no separate scheduling class. The
+   pre-check probe (Stage 0) may exist in git history but is not the deliverable.
+2. Patched kernel builds and boots under UML, then on a VM, with the replaced fair
+   scheduler as the default for all normal tasks.
+3. Inversion microbenchmark shows: under the replaced scheduler, ordinary nice-only
+   tasks (no PI API) get bounded HIGH blocking and MED's share collapses while HIGH
+   is blocked (LOW catches the flow) — versus stock where MED feasts.
+4. The flow reverts on release with no residual boost (verify: after S is freed,
+   LOW's effective weight returns to base — memoryless).
+5. **EEVDF invariants preserved**: lag/eligibility accounting stays consistent
+   across the live weight changes (no fairness drift, zero-lag-sum maintained).
+   Demonstrate with a fairness benchmark (e.g. competing `stress-ng` / `hackbench`
+   loads) that non-contending workloads are scheduled as fairly as stock.
+6. Same behavior holds inside a container on the patched kernel, including across
+   cgroup boundaries (document the cross-group flow decision).
+7. A `FINDINGS.md`: what broke in the replacement, the wait-graph propagation cost
+   under load, how EEVDF lag was kept balanced, the cross-cgroup-flow decision, and
+   whether sum-vs-max materially changed outcomes.
 
 ---
 
