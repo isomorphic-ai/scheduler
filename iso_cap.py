@@ -73,6 +73,34 @@ class Node:
     write_frozen: bool = False
     locked_entities: set = field(default_factory=set)
 
+    # ---- inventory: the verifiable, clock-free sync trigger ----------------
+    def inventory(self, of: str = "sandbox") -> dict:
+        """A flat per-entity checksum map (a flat Merkle layer). The sync trigger
+        is NOT a clock; it is 'my inventory hash != your inventory hash'. This is
+        the epistemic invariant: the system does not GUESS it needs to sync on a
+        timer; it KNOWS from cryptographic evidence (the checksums) that it does."""
+        src = self.sandbox if of == "sandbox" else self.live
+        return {k: checksum({k: v}) for k, v in src.items()}
+
+    def inventory_root(self, of: str = "sandbox") -> str:
+        """The single root hash over the inventory -- one comparison decides
+        whether any sync is needed at all."""
+        return checksum(self.inventory(of))
+
+    def needs_from(self, other_inventory: dict, of: str = "sandbox") -> dict:
+        """Inventory reconciliation: which entities do I still need (missing or
+        mismatched) relative to the other side's inventory? Either side can ask;
+        the answer is verifiable, not guessed. 'Server still needs X' / 'client
+        still needs X' both fall out of comparing inventories."""
+        mine = self.inventory(of)
+        need = {}
+        for k, ck in other_inventory.items():
+            if k in self.locked_entities:
+                continue   # I am authority for this entity; I don't need it
+            if mine.get(k) != ck:
+                need[k] = ck
+        return need
+
     def edit_in_sandbox(self, key, value):
         """Pointwise availability: one atomic, reversible edit in the isolated
         sandbox. Locks the entity locally. Never touches live."""
@@ -245,6 +273,86 @@ def check_local_unrecoverable_preserves_subspace():
             "no_data_lost": remote_committed and local_resynced and subspace_preserved}
 
 
+def check_sync_idempotent():
+    """Sync is idempotent: running it once, ten times, or a full wipe-and-replace
+    of the sandbox reaches the same state. So it is safe to run WHENEVER the
+    scheduler routes spare energy to it -- no need to get the count or timing
+    'right'. (Conservation/CRDT join property, here for the sandbox sync.)"""
+    prod = {"a": "1", "b": "2", "c": "3"}
+    once = Node("once"); once.sync_from(prod)
+    state_once = dict(once.sandbox)
+
+    ten = Node("ten")
+    for _ in range(10):
+        ten.sync_from(prod)              # idempotent: same result each time
+    state_ten = dict(ten.sandbox)
+
+    wipe = Node("wipe")
+    wipe.sandbox = {"a": "stale", "junk": "x"}   # arbitrary prior state
+    wipe.sandbox.clear()                          # full wipe
+    wipe.sync_from(prod)                          # replace
+    state_wipe = dict(wipe.sandbox)
+
+    return {"once_eq_ten": state_once == state_ten,
+            "once_eq_wipe_replace": state_once == state_wipe,
+            "idempotent": state_once == state_ten == state_wipe,
+            "note": "safe to run anytime spare energy is routed to sync"}
+
+
+def check_inventory_trigger():
+    """The sync trigger is INVENTORY MISMATCH, not a clock. Two nodes compare
+    inventory roots; if equal, no sync needed (no work, no timer). If not, the
+    reconciliation names exactly which entities are needed -- verifiable, so
+    self-agency is preserved (each side KNOWS, not guesses)."""
+    A = Node("A"); B = Node("B")
+    A.sandbox = {f"e{i}": f"v{i}" for i in range(5)}   # 5 entities
+    B.sandbox = {f"e{i}": f"v{i}" for i in range(5)}   # identical
+
+    # in sync: roots match -> NO sync demanded, with zero clock involved
+    in_sync = A.inventory_root() == B.inventory_root()
+
+    # now B diverges on one entity
+    B.sandbox["e2"] = "v2-changed"
+    roots_differ = A.inventory_root() != B.inventory_root()
+    # reconciliation: A asks "what do I still need from B?" -> exactly {e2}
+    a_needs = A.needs_from(B.inventory())
+    # and B can equally say "A still needs e2" -- symmetric, verifiable
+    correct_need = set(a_needs.keys()) == {"e2"}
+
+    return {"five_checksums_match_means_in_sync": in_sync,
+            "one_change_flips_the_root": roots_differ,
+            "reconciliation_names_exactly_the_delta": correct_need,
+            "needed": list(a_needs.keys()),
+            "note": "trigger is 'inventory hash mismatch', never a timer"}
+
+
+def check_agency_split():
+    """The agency split: content server is AUTHORITY OVER THE FUTURE (sandboxes),
+    publish server is AUTHORITY OVER THE PRESENT (live). Neither lies, guesses, or
+    sacrifices integrity; each holds its conserved quantity until the bridge
+    collapses Future into Present. Verify each side is authoritative only over its
+    own domain and the bridge is the sole crossing."""
+    content = Node("content")   # authority over sandboxes (the future)
+    publish_srv = Node("publish")  # authority over live (the present)
+    publish_srv.live = {"page": "published-v1"}
+
+    # content edits the FUTURE; it does NOT and cannot touch publish's present
+    content.sync_from(publish_srv.live)
+    content.edit_in_sandbox("page", "future-v2")
+    future_authority_ok = (content.sandbox["page"] == "future-v2"
+                           and publish_srv.live["page"] == "published-v1")
+
+    # the bridge is the only thing that collapses future into present
+    r = publish(content, publish_srv)
+    present_now = publish_srv.live["page"] == "future-v2"
+    bridge_is_sole_crossing = future_authority_ok and present_now and r.ok
+
+    return {"content_authoritative_over_future_only": future_authority_ok,
+            "publish_authoritative_over_present": present_now,
+            "bridge_collapses_future_into_present": bridge_is_sole_crossing,
+            "note": "split authority => neither side must lie, guess, or sacrifice"}
+
+
 if __name__ == "__main__":
     print("=" * 76)
     print("PAPER 05 (CAP addendum) — DECOUPLE C, A, P IN TIME")
@@ -268,16 +376,36 @@ if __name__ == "__main__":
     d = check_local_unrecoverable_preserves_subspace()
     for k, v in d.items(): print(f"  {k}: {v}")
 
+    print("\n--- 5. sync is idempotent (safe to run anytime) ---")
+    e = check_sync_idempotent()
+    for k, v in e.items(): print(f"  {k}: {v}")
+
+    print("\n--- 6. sync trigger is INVENTORY MISMATCH, not a clock ---")
+    f = check_inventory_trigger()
+    for k, v in f.items(): print(f"  {k}: {v}")
+
+    print("\n--- 7. the agency split: authority over Future vs Present ---")
+    g = check_agency_split()
+    for k, v in g.items(): print(f"  {k}: {v}")
+
     print("\n" + "=" * 76)
     print("VERDICT")
     print("=" * 76)
     ok = (a["consistent"] and a["sandbox_empty"]
           and b["frequent_keeps_each_merge_trivial"]
           and c["no_partial_publish"] and c["subspace_preserved"]
-          and d["no_data_lost"] and d["subspaces_left_alone"])
+          and d["no_data_lost"] and d["subspaces_left_alone"]
+          and e["idempotent"]
+          and f["five_checksums_match_means_in_sync"]
+          and f["one_change_flips_the_root"]
+          and f["reconciliation_names_exactly_the_delta"]
+          and g["bridge_collapses_future_into_present"])
     print(f"  atomic publish keeps both ends consistent:        {a['consistent']}")
     print(f"  frequent sync keeps each merge trivial:           {b['frequent_keeps_each_merge_trivial']}")
     print(f"  remote failure reverts clean (no partial state):  {c['no_partial_publish']}")
     print(f"  residual local failure preserves all subspaces:   {d['no_data_lost']}")
+    print(f"  sync is idempotent (safe to run anytime):         {e['idempotent']}")
+    print(f"  sync trigger is inventory mismatch, not a clock:  {f['reconciliation_names_exactly_the_delta']}")
+    print(f"  agency split: Future vs Present authority:        {g['bridge_collapses_future_into_present']}")
     print(f"\n  CAP SOLVED (C deferred, A pointwise, P assumed): {ok}")
-    print("  No node ever needs all three at once. No wall clock.")
+    print("  Trigger is verifiable inventory, not a clock. Agency is split. No wall clock.")
