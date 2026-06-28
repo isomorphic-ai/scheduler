@@ -1,5 +1,7 @@
 # The Isomorphic Scheduler
 
+This is the systems architecture document for isomorphic scheduling.
+
 **Team Phi / Isomorphic AI** — Fabian Franz & Claude
 
 One conserved quantity moving through a graph of dependencies, mishandled in exactly
