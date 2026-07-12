@@ -197,6 +197,35 @@ theorem l4_reachable {n : Nat} {s t : Sys n}
   | tail reach hstep ih =>
       exact l4_mixed_step hstep ih
 
+theorem totalCredit_yieldStep_le {n : Nat}
+    (s : Sys n) (plan : YieldPlan s) :
+    totalCredit s <= totalCredit (yieldStep s plan) := by
+  unfold totalCredit yieldStep yieldProc
+  have hsum :
+      sumFin (fun i => (s.procs i).credit + plan.amount i) =
+        sumFin (fun i => (s.procs i).credit) + sumFin plan.amount := by
+    exact sumFin_add (fun i => (s.procs i).credit) plan.amount
+  have hnonneg : 0 <= sumFin plan.amount :=
+    sumFin_nonneg plan.amount plan.amount_nonneg
+  grind
+
+theorem credit_monotone_under_yield_reachable {n : Nat}
+    {s t : Sys n} (reach : RTC YieldRel s t) :
+    totalCredit s <= totalCredit t := by
+  apply monotone_under_adversary
+    (le := fun a b : Qty => b <= a)
+    (leRefl := fun a => by grind)
+    (leTrans := by
+      intro a b c hab hbc
+      grind)
+    (E := YieldRel)
+    (f := totalCredit)
+  · intro s t hstep
+    rcases hstep with ⟨plan, ht⟩
+    subst ht
+    exact totalCredit_yieldStep_le s plan
+  · exact reach
+
 theorem reachable_deadlock_absorbing {n : Nat} (s t : Sys n)
     (hd : deadlocked s) (reach : RTC StepRel s t) :
     t = s := by

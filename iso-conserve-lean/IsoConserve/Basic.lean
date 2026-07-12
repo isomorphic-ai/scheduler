@@ -88,6 +88,9 @@ def procAccounted (cost : Qty) (p : Proc) : Qty :=
 def totalHeld {n : Nat} (s : Sys n) : Qty :=
   sumFin (fun i => (s.procs i).stock + (s.procs i).credit)
 
+def totalCredit {n : Nat} (s : Sys n) : Qty :=
+  sumFin (fun i => (s.procs i).credit)
+
 def totalConverted {n : Nat} (s : Sys n) : Qty :=
   sumFin (fun i => ((s.procs i).converted : Qty))
 

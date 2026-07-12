@@ -59,6 +59,12 @@ allocation.
   accounting and well-formedness.
 - Reachable invariants: `IsoConserve.wf_reachable` and `IsoConserve.l4_reachable`
   lift WF and L4 over mixed flow/drain/yield reachability.
+- Canonical plan instance: `IsoConserve.pythonRatePlan` constructs a `RatePlan`
+  using Python-style quantum, supplied effective weights, and a finite forced
+  conversion loop bounded by remaining work. `IsoConserve.pythonRatePlan_conservation`
+  instantiates L1 on that plan.
+- Resolution credit core: `IsoConserve.credit_monotone_under_yield_reachable`
+  proves banked credit is non-decreasing over yield-only reachability.
 
 ## Reusable Monotonicity Kernel
 
@@ -91,6 +97,23 @@ the caching series' "loss is invalidation" theorem.
 half: a trust-on-absence predicate strictly grows after a one-step loss in a
 one-key, one-proof cache. Together these are the mechanized shape of Claim 1.
 
+## Canonical Python-Plan Instance
+
+`IsoConserve.Canonical` defines `Init`, `pythonQuantum`, `forcedConvert`, and
+`pythonRatePlan`. The conversion loop is finite because it is bounded by
+`remainingWork`; `pythonConvert_forced_maximal` proves that if the loop stops before
+exhausting remaining work, the residual stock is below `convertCost`.
+
+The canonical plan is parameterized by supplied effective weights. This keeps the
+wait-graph/effective-rate computation outside the accounting kernel while proving
+that, once those weights are available and have positive total weight, the
+Python-style plan is a verified `RatePlan`.
+
+`IsoConserve.subthreshold_python_noProgress` and
+`IsoConserve.subthreshold_python_convertibleStock_increases` mechanize the L2
+threshold finding: a canonical one-process step can make no conversion progress
+while increasing convertible stock.
+
 ## What The Plan Abstraction Covers
 
 The abstraction proves L1/L4 for a superset of the Python transition's accounting
@@ -114,7 +137,8 @@ system, not the full Python lock/wait dynamics.
 - `done` is frozen; no step marks a process done, releases locks, or wakes waiters.
 - `FlowPlan` conversion is optional rather than Python's forced-maximal conversion.
 - The effective-rate recursion is not formalized; `RatePlan` covers the weighted
-  partition once weights are supplied.
+  partition once weights are supplied, and `pythonRatePlan` is the canonical
+  positive-total-weight instance over supplied weights.
 - Credit is accounted, and stock-to-credit yield/banking is modeled as `YieldPlan`;
   full victimless-resolution behavior remains outside this pass.
 
