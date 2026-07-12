@@ -159,6 +159,7 @@ theorem procAccounted_stepProc {n : Nat} (s : Sys n)
 structure DrainPlan {n : Nat} (s : Sys n) where
   drain : Fin n -> Qty
   drain_nonneg : forall i, 0 <= drain i
+  drain_blocked : forall i, s.runnable i = true -> drain i = 0
   stock_after_nonneg : forall i, 0 <= (s.procs i).stock - drain i
 
 def drainProc {n : Nat} (s : Sys n) (plan : DrainPlan s) (i : Fin n) : Proc :=

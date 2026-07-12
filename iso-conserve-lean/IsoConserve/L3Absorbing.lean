@@ -34,7 +34,7 @@ theorem totalConverted_deadlocked_step_eq {n : Nat} (s : Sys n)
   have hc : activeNat s plan.convert i = 0 := inactive_activeNat_eq_zero s plan.convert h i
   simp [hc]
 
-theorem accounted_deadlocked_step_eq {n : Nat} (s : Sys n) (plan : FlowPlan s)
+theorem step_deadlocked_fixed {n : Nat} (s : Sys n) (plan : FlowPlan s)
     (h : atTableEmpty s) :
     step s plan = s := by
   cases s with
