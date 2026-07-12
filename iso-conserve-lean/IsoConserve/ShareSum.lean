@@ -23,8 +23,24 @@ theorem share_sum_of_partition {n : Nat}
     _ = quantum := by
           grind
 
-theorem share_sum_assumed {n : Nat} (share : Fin n -> Qty) (quantum : Qty)
-    (h : sumFin share = quantum) :
-    sumFin share = quantum := h
+structure RatePlan {n : Nat} (s : Sys n) extends FlowPlan s where
+  quantum : Qty
+  totalWeight : Qty
+  weight : Fin n -> Qty
+  totalWeight_ne_zero : totalWeight != 0
+  weight_sum : sumFin weight = totalWeight
+  share_eq : forall i, share i = sharesFromWeights quantum totalWeight weight i
+
+theorem ratePlan_share_sum {n : Nat} {s : Sys n} (plan : RatePlan s) :
+    sumFin plan.share = plan.quantum := by
+  calc
+    sumFin plan.share =
+        sumFin (sharesFromWeights plan.quantum plan.totalWeight plan.weight) := by
+          apply sumFin_congr
+          intro i
+          exact plan.share_eq i
+    _ = plan.quantum := by
+          exact share_sum_of_partition plan.quantum plan.totalWeight plan.weight
+            plan.totalWeight_ne_zero plan.weight_sum
 
 end IsoConserve

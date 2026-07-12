@@ -23,8 +23,7 @@ theorem convertibleStock_drainStep_le {n : Nat} (s : Sys n)
     grind
   · grind
 
-theorem L2_monotone {n : Nat} (s : Sys n) (plan : DrainPlan s)
-    (_h : WF s) (_noProgress : noProgress s (drainStep s plan)) :
+theorem L2_monotone {n : Nat} (s : Sys n) (plan : DrainPlan s) :
     convertibleStock (drainStep s plan) <= convertibleStock s :=
   convertibleStock_drainStep_le s plan
 
