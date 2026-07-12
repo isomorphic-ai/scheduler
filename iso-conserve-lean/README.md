@@ -65,6 +65,18 @@ ordered by trusted-set inclusion.
 `IsoConserve.blocked_stock_monotone_restricted` is the scheduler-side blocked-stock
 instance using the same generic kernel.
 
+## Caching Polarity Instance
+
+`IsoConserve.Polarity` contains the second instance of the shared kernel. It models
+a cache store as a characteristic set of `(key, proof)` records, defines storage
+loss as subset while authority is unchanged, and defines positive trust as
+presence-and-match against authority.
+
+`IsoConserve.polarity_claim_one` proves paper02's polarity claim: across any
+reflexive-transitive sequence of storage-loss steps, the trusted set can only
+shrink. This is the formal bridge between scheduler L2's downhill direction and
+the caching series' "loss is invalidation" theorem.
+
 ## What The Plan Abstraction Covers
 
 The abstraction proves L1/L4 for a superset of the Python transition's accounting
