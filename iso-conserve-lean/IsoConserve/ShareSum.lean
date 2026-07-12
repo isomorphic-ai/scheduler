@@ -29,6 +29,7 @@ structure RatePlan {n : Nat} (s : Sys n) extends FlowPlan s where
   weight : Fin n -> Qty
   totalWeight_ne_zero : totalWeight != 0
   weight_sum : sumFin weight = totalWeight
+  weight_blocked : forall i, s.runnable i = false -> weight i = 0
   share_eq : forall i, share i = sharesFromWeights quantum totalWeight weight i
 
 theorem ratePlan_share_sum {n : Nat} {s : Sys n} (plan : RatePlan s) :

@@ -27,4 +27,8 @@ theorem L2_monotone {n : Nat} (s : Sys n) (plan : DrainPlan s) :
     convertibleStock (drainStep s plan) <= convertibleStock s :=
   convertibleStock_drainStep_le s plan
 
+theorem L2_drain_monotone {n : Nat} (s : Sys n) (plan : DrainPlan s) :
+    convertibleStock (drainStep s plan) <= convertibleStock s :=
+  convertibleStock_drainStep_le s plan
+
 end IsoConserve
