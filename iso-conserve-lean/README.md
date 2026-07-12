@@ -23,10 +23,16 @@ For the blocked/no-progress detector regime, a separate `DrainPlan` models stock
 draining from blocked processes back to the reservoir. `DrainPlan.drain_blocked`
 requires runnable processes to drain zero.
 
+For the resolution/banking reading, `YieldPlan` moves stock into credit while
+leaving `netFlowIntegral` unchanged. This is the Lean form of the task file's
+"banking must not touch the external-flow integral" gotcha.
+
 `RatePlan` is an optional refinement of `FlowPlan` whose shares are explicitly the
 weighted partition `quantum * weight / totalWeight`; `ratePlan_share_sum` wires that
-refinement to `share_sum_of_partition`. Plain `FlowPlan`s remain deliberately
-unconstrained so L1/L4 apply to any accounting-balanced allocation.
+refinement to `share_sum_of_partition`. `RatePlan.weight_blocked` records that
+non-runnable processes have zero weight in the canonical split. Plain `FlowPlan`s
+remain deliberately unconstrained so L1/L4 apply to any accounting-balanced
+allocation.
 
 ## Paper Law Map
 
@@ -38,17 +44,21 @@ unconstrained so L1/L4 apply to any accounting-balanced allocation.
   proves the usual weighted-share partition lemma over rationals.
 - L2 monotonicity: `IsoConserve.L2_monotone`
   proves convertible stock is non-increasing for the explicit no-progress drain
-  step. `IsoConserve.blocked_stock_monotone` proves the stronger detector lemma:
-  a process that starts blocked has non-increasing stock across any mixed sequence
-  of flow and drain steps.
+  step. `IsoConserve.L2_drain_monotone` is the scope-explicit export alias.
+  `IsoConserve.blocked_stock_monotone` proves the stronger detector lemma: a
+  process that starts blocked has non-increasing stock across any mixed sequence
+  of flow, drain, and yield steps.
 - L3 absorption: `IsoConserve.L3_absorbing`
   proves an empty at-table remains deadlocked and makes no conversion progress.
   `IsoConserve.reachable_deadlock_absorbing` lifts the fixed-point behavior across
   reflexive-transitive closure.
 - L4 stock = integral: `IsoConserve.L4_stock_is_integral`,
-  with preservation lemmas `l4_step` and `l4_drainStep`.
+  with preservation lemmas `l4_step`, `l4_drainStep`, and `l4_yield`.
+- Yield conservation: `IsoConserve.yield_conservation` and
+  `IsoConserve.wf_yieldStep` prove that stock-to-credit banking preserves
+  accounting and well-formedness.
 - Reachable invariants: `IsoConserve.wf_reachable` and `IsoConserve.l4_reachable`
-  lift WF and L4 over mixed flow/drain reachability.
+  lift WF and L4 over mixed flow/drain/yield reachability.
 
 ## Reusable Monotonicity Kernel
 
@@ -77,6 +87,10 @@ reflexive-transitive sequence of storage-loss steps, the trusted set can only
 shrink. This is the formal bridge between scheduler L2's downhill direction and
 the caching series' "loss is invalidation" theorem.
 
+`IsoConserve.trust_on_absence_loss_counterexample` proves the negative-polarity
+half: a trust-on-absence predicate strictly grows after a one-step loss in a
+one-key, one-proof cache. Together these are the mechanized shape of Claim 1.
+
 ## What The Plan Abstraction Covers
 
 The abstraction proves L1/L4 for a superset of the Python transition's accounting
@@ -101,8 +115,8 @@ system, not the full Python lock/wait dynamics.
 - `FlowPlan` conversion is optional rather than Python's forced-maximal conversion.
 - The effective-rate recursion is not formalized; `RatePlan` covers the weighted
   partition once weights are supplied.
-- Credit is accounted and preserved by L4, but stock-to-credit yield/banking is not
-  modeled in this pass.
+- Credit is accounted, and stock-to-credit yield/banking is modeled as `YieldPlan`;
+  full victimless-resolution behavior remains outside this pass.
 
 The L3 theorem is faithful to Python's empty-table branch, which is a no-op. In this
 model the `done` component is frozen everywhere, so the `not allDone` preservation is

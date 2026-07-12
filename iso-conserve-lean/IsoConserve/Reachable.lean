@@ -28,8 +28,11 @@ def StepRel {n : Nat} (s t : Sys n) : Prop :=
 def DrainRel {n : Nat} (s t : Sys n) : Prop :=
   exists plan : DrainPlan s, t = drainStep s plan
 
+def YieldRel {n : Nat} (s t : Sys n) : Prop :=
+  exists plan : YieldPlan s, t = yieldStep s plan
+
 def MixedRel {n : Nat} (s t : Sys n) : Prop :=
-  StepRel s t \/ DrainRel s t
+  StepRel s t \/ DrainRel s t \/ YieldRel s t
 
 theorem L2_monotone_under_drain_reachable {n : Nat} (s t : Sys n)
     (reach : RTC DrainRel s t) :
@@ -62,6 +65,13 @@ theorem drainStep_stock_le {n : Nat} (i : Fin n)
   have hd := plan.drain_nonneg i
   grind
 
+theorem yieldStep_stock_le {n : Nat} (i : Fin n)
+    (s : Sys n) (plan : YieldPlan s) :
+    ((yieldStep s plan).procs i).stock <= (s.procs i).stock := by
+  unfold yieldStep yieldProc
+  have hy := plan.amount_nonneg i
+  grind
+
 theorem mixed_step_blocked_stock_le {n : Nat} (i : Fin n)
     (s t : Sys n) (hb : s.runnable i = false) (h : MixedRel s t) :
     (t.procs i).stock <= (s.procs i).stock := by
@@ -72,9 +82,15 @@ theorem mixed_step_blocked_stock_le {n : Nat} (i : Fin n)
       rw [step_blocked_stock_eq i s plan hb]
       grind
   | inr hdrain =>
-      rcases hdrain with ⟨plan, ht⟩
-      subst ht
-      exact drainStep_stock_le i s plan
+      cases hdrain with
+      | inl hdrain =>
+          rcases hdrain with ⟨plan, ht⟩
+          subst ht
+          exact drainStep_stock_le i s plan
+      | inr hyield =>
+          rcases hyield with ⟨plan, ht⟩
+          subst ht
+          exact yieldStep_stock_le i s plan
 
 theorem mixed_step_runnable_eq {n : Nat} (i : Fin n)
     {s t : Sys n} (h : MixedRel s t) :
@@ -84,10 +100,16 @@ theorem mixed_step_runnable_eq {n : Nat} (i : Fin n)
       rcases hstep with ⟨plan, ht⟩
       subst ht
       rfl
-  | inr hdrain =>
-      rcases hdrain with ⟨plan, ht⟩
-      subst ht
-      rfl
+  | inr hrest =>
+      cases hrest with
+      | inl hdrain =>
+          rcases hdrain with ⟨plan, ht⟩
+          subst ht
+          rfl
+      | inr hyield =>
+          rcases hyield with ⟨plan, ht⟩
+          subst ht
+          rfl
 
 theorem mixed_reachable_runnable_eq {n : Nat} (i : Fin n)
     {s t : Sys n} (reach : RTC MixedRel s t) :
@@ -132,10 +154,16 @@ theorem wf_mixed_step {n : Nat} {s t : Sys n}
       rcases hstep with ⟨plan, ht⟩
       subst ht
       exact wf_step s plan hwf
-  | inr hdrain =>
-      rcases hdrain with ⟨plan, ht⟩
-      subst ht
-      exact wf_drainStep s plan hwf
+  | inr hrest =>
+      cases hrest with
+      | inl hdrain =>
+          rcases hdrain with ⟨plan, ht⟩
+          subst ht
+          exact wf_drainStep s plan hwf
+      | inr hyield =>
+          rcases hyield with ⟨plan, ht⟩
+          subst ht
+          exact wf_yieldStep s plan hwf
 
 theorem wf_reachable {n : Nat} {s t : Sys n}
     (hwf : WF s) (reach : RTC MixedRel s t) : WF t := by
@@ -151,10 +179,16 @@ theorem l4_mixed_step {n : Nat} {s t : Sys n}
       rcases hstep with ⟨plan, ht⟩
       subst ht
       exact l4_step s plan hl4
-  | inr hdrain =>
-      rcases hdrain with ⟨plan, ht⟩
-      subst ht
-      exact l4_drainStep s plan hl4
+  | inr hrest =>
+      cases hrest with
+      | inl hdrain =>
+          rcases hdrain with ⟨plan, ht⟩
+          subst ht
+          exact l4_drainStep s plan hl4
+      | inr hyield =>
+          rcases hyield with ⟨plan, ht⟩
+          subst ht
+          exact l4_yieldStep s plan hl4
 
 theorem l4_reachable {n : Nat} {s t : Sys n}
     (hl4 : L4Invariant s) (reach : RTC MixedRel s t) : L4Invariant t := by

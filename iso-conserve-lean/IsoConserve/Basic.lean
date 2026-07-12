@@ -182,4 +182,29 @@ theorem procAccounted_drainProc {n : Nat} (s : Sys n)
   unfold procAccounted drainProc
   grind
 
+structure YieldPlan {n : Nat} (s : Sys n) where
+  amount : Fin n -> Qty
+  amount_nonneg : forall i, 0 <= amount i
+  stock_after_nonneg : forall i, 0 <= (s.procs i).stock - amount i
+
+def yieldProc {n : Nat} (s : Sys n) (plan : YieldPlan s) (i : Fin n) : Proc :=
+  let p := s.procs i
+  { p with
+    stock := p.stock - plan.amount i
+    credit := p.credit + plan.amount i }
+
+def yieldStep {n : Nat} (s : Sys n) (plan : YieldPlan s) : Sys n :=
+  { procs := fun i => yieldProc s plan i
+    runnable := s.runnable
+    reservoir := s.reservoir
+    convertCost := s.convertCost
+    totalQ := s.totalQ }
+
+theorem procAccounted_yieldProc {n : Nat} (s : Sys n)
+    (plan : YieldPlan s) (i : Fin n) :
+    procAccounted s.convertCost (yieldProc s plan i) =
+      procAccounted s.convertCost (s.procs i) := by
+  unfold procAccounted yieldProc
+  grind
+
 end IsoConserve

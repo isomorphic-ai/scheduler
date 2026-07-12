@@ -8,6 +8,10 @@ The caching-series polarity instance of `monotone_under_adversary`.
 A store is represented as a characteristic set of `(key, proof)` records. This is
 finite whenever the key/proof universes are finite; the proof itself only needs the
 subset order induced by storage loss.
+
+Division of labor: this Lean module proves the order/lattice half for arbitrary
+key/proof universes. The TLA+/TLC MapChaos model checks an implemented predicate at
+finite model size.
 -/
 
 structure CacheRecord (Key Proof : Type) where
@@ -68,5 +72,33 @@ theorem polarity_claim_one {Key Proof : Type}
   · intro s t h
     exact positive_trust_loss_step s t h
   · exact reach
+
+def negTrusted {Key Proof : Type} (s : CacheState Key Proof) : TrustSet Key :=
+  fun key => ¬ exists proof, s.store { key := key, proof := proof } = true
+
+def fullUnitCacheState : CacheState Unit Unit :=
+  { store := fun _ => true
+    authority := fun _ => true }
+
+def emptyUnitCacheState : CacheState Unit Unit :=
+  { store := fun _ => false
+    authority := fun _ => true }
+
+theorem trust_on_absence_loss_counterexample :
+    exists s t : CacheState Unit Unit,
+      LossRel s t /\ negTrusted t () /\ ¬ negTrusted s () := by
+  refine ⟨fullUnitCacheState, emptyUnitCacheState, ?_, ?_, ?_⟩
+  · constructor
+    · rfl
+    · intro record h
+      cases record
+      rfl
+  · intro h
+    rcases h with ⟨proof, hp⟩
+    cases proof
+    simp [emptyUnitCacheState] at hp
+  · intro h
+    apply h
+    exact ⟨(), rfl⟩
 
 end IsoConserve
