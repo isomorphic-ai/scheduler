@@ -7,3 +7,4 @@ import IsoConserve.L4Integral
 import IsoConserve.Reachable
 import IsoConserve.Polarity
 import IsoConserve.Canonical
+import IsoConserve.WaitGraph
