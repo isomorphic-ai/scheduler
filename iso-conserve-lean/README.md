@@ -62,7 +62,9 @@ allocation.
 - Canonical plan instance: `IsoConserve.pythonRatePlan` constructs a `RatePlan`
   using Python-style quantum, supplied effective weights, and a finite forced
   conversion loop bounded by remaining work. `IsoConserve.pythonRatePlan_conservation`
-  instantiates L1 on that plan.
+  instantiates L1 on that plan. `IsoConserve.canonicalPythonStepRel_is_mixedRel`
+  is the bridge theorem: every well-formed positive-weight canonical Python-style
+  step is a verified mixed-system step.
 - Resolution credit core: `IsoConserve.credit_monotone_under_yield_reachable`
   proves banked credit is non-decreasing over yield-only reachability.
 - Wait-graph L3/detection v2:
@@ -104,15 +106,20 @@ one-key, one-proof cache. Together these are the mechanized shape of Claim 1.
 
 ## Canonical Python-Plan Instance
 
-`IsoConserve.Canonical` defines `Init`, `pythonQuantum`, `forcedConvert`, and
-`pythonRatePlan`. The conversion loop is finite because it is bounded by
+`IsoConserve.Canonical` defines `Init`, `pythonQuantum`, `forcedConvert`,
+`pythonRatePlan`, and the well-formed canonical step relation
+`CanonicalPythonStepRel`. The conversion loop is finite because it is bounded by
 `remainingWork`; `pythonConvert_forced_maximal` proves that if the loop stops before
 exhausting remaining work, the residual stock is below `convertCost`.
 
 The canonical plan is parameterized by supplied effective weights. This keeps the
 wait-graph/effective-rate computation outside the accounting kernel while proving
 that, once those weights are available and have positive total weight, the
-Python-style plan is a verified `RatePlan`.
+Python-style plan is a verified `RatePlan`. The named bridge theorem
+`canonicalPythonStepRel_is_mixedRel` proves that the canonical Python-style
+transition is an instance of the verified transition system; `wf_pythonStepOfWF`
+and `l4_pythonStepOfWF` then inherit the existing reachable WF/L4 preservation
+theorems for that concrete step.
 
 `IsoConserve.subthreshold_python_noProgress` and
 `IsoConserve.subthreshold_python_convertibleStock_increases` mechanize the L2

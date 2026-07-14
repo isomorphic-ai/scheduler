@@ -1,5 +1,6 @@
 import IsoConserve.L1Conservation
 import IsoConserve.L4Integral
+import IsoConserve.Reachable
 import IsoConserve.ShareSum
 
 namespace IsoConserve
@@ -113,6 +114,15 @@ theorem canonicalWeight_blocked {n : Nat} (s : Sys n)
     canonicalWeight s eff i = 0 := by
   unfold canonicalWeight active
   simp [h]
+
+theorem canonicalWeight_nonneg {n : Nat} (s : Sys n)
+    (eff : Fin n -> Qty) (heff : forall i, 0 <= eff i) :
+    forall i, 0 <= canonicalWeight s eff i := by
+  intro i
+  unfold canonicalWeight active
+  by_cases h : s.runnable i
+  · simp [h, heff i]
+  · simp [h]
 
 theorem canonicalShare_blocked {n : Nat} (s : Sys n)
     (eff : Fin n -> Qty)
@@ -263,6 +273,113 @@ def pythonRatePlan {n : Nat} (s : Sys n) (eff : Fin n -> Qty)
     share_eq := by
       intro i
       rfl }
+
+def pythonRatePlanOfWF {n : Nat} (s : Sys n) (eff : Fin n -> Qty)
+    (hwf : WF s)
+    (hTotalPos : 0 < canonicalTotalWeight s eff)
+    (heff : forall i, 0 <= eff i) :
+    RatePlan s :=
+  pythonRatePlan s eff hwf.reservoir_nonneg hwf.stock_nonneg hTotalPos
+    (canonicalWeight_nonneg s eff heff)
+
+def pythonStepOfWF {n : Nat} (s : Sys n) (eff : Fin n -> Qty)
+    (hwf : WF s)
+    (hTotalPos : 0 < canonicalTotalWeight s eff)
+    (heff : forall i, 0 <= eff i) : Sys n :=
+  step s (pythonRatePlanOfWF s eff hwf hTotalPos heff).toFlowPlan
+
+def CanonicalPythonStepRel {n : Nat} (s t : Sys n) : Prop :=
+  exists (eff : Fin n -> Qty)
+    (hwf : WF s)
+    (hTotalPos : 0 < canonicalTotalWeight s eff)
+    (heff : forall i, 0 <= eff i),
+    t = pythonStepOfWF s eff hwf hTotalPos heff
+
+theorem pythonRatePlanOfWF_share_sum {n : Nat} (s : Sys n)
+    (eff : Fin n -> Qty) (hwf : WF s)
+    (hTotalPos : 0 < canonicalTotalWeight s eff)
+    (heff : forall i, 0 <= eff i) :
+    sumFin (pythonRatePlanOfWF s eff hwf hTotalPos heff).share =
+      pythonQuantum s := by
+  exact ratePlan_share_sum (pythonRatePlanOfWF s eff hwf hTotalPos heff)
+
+theorem pythonRatePlanOfWF_active_share_sum {n : Nat} (s : Sys n)
+    (eff : Fin n -> Qty) (hwf : WF s)
+    (hTotalPos : 0 < canonicalTotalWeight s eff)
+    (heff : forall i, 0 <= eff i) :
+    sumFin (fun i =>
+        active s (pythonRatePlanOfWF s eff hwf hTotalPos heff).share i) =
+      pythonQuantum s := by
+  calc
+    sumFin (fun i =>
+        active s (pythonRatePlanOfWF s eff hwf hTotalPos heff).share i) =
+        sumFin (fun i => active s (canonicalShare s eff) i) := by
+          rfl
+    _ = sumFin (canonicalShare s eff) := canonicalShare_sum_active s eff
+    _ = pythonQuantum s := by
+          have hTotal : canonicalTotalWeight s eff != 0 := by grind
+          exact share_sum_of_partition (pythonQuantum s)
+            (canonicalTotalWeight s eff) (canonicalWeight s eff) hTotal rfl
+
+theorem pythonStepOfWF_is_verified_step {n : Nat} (s : Sys n)
+    (eff : Fin n -> Qty) (hwf : WF s)
+    (hTotalPos : 0 < canonicalTotalWeight s eff)
+    (heff : forall i, 0 <= eff i) :
+    StepRel s (pythonStepOfWF s eff hwf hTotalPos heff) := by
+  exact ⟨(pythonRatePlanOfWF s eff hwf hTotalPos heff).toFlowPlan, rfl⟩
+
+theorem pythonStepOfWF_is_verified_mixed_step {n : Nat} (s : Sys n)
+    (eff : Fin n -> Qty) (hwf : WF s)
+    (hTotalPos : 0 < canonicalTotalWeight s eff)
+    (heff : forall i, 0 <= eff i) :
+    MixedRel s (pythonStepOfWF s eff hwf hTotalPos heff) := by
+  exact Or.inl (pythonStepOfWF_is_verified_step s eff hwf hTotalPos heff)
+
+theorem canonicalPythonStepRel_is_stepRel {n : Nat} {s t : Sys n}
+    (h : CanonicalPythonStepRel s t) :
+    StepRel s t := by
+  rcases h with ⟨eff, hwf, hTotalPos, heff, ht⟩
+  subst ht
+  exact pythonStepOfWF_is_verified_step s eff hwf hTotalPos heff
+
+theorem canonicalPythonStepRel_is_mixedRel {n : Nat} {s t : Sys n}
+    (h : CanonicalPythonStepRel s t) :
+    MixedRel s t := by
+  exact Or.inl (canonicalPythonStepRel_is_stepRel h)
+
+theorem pythonStepOfWF_reachable {n : Nat} (s : Sys n)
+    (eff : Fin n -> Qty) (hwf : WF s)
+    (hTotalPos : 0 < canonicalTotalWeight s eff)
+    (heff : forall i, 0 <= eff i) :
+    RTC MixedRel s (pythonStepOfWF s eff hwf hTotalPos heff) := by
+  exact RTC.tail (RTC.refl s)
+    (pythonStepOfWF_is_verified_mixed_step s eff hwf hTotalPos heff)
+
+theorem wf_pythonStepOfWF {n : Nat} (s : Sys n)
+    (eff : Fin n -> Qty) (hwf : WF s)
+    (hTotalPos : 0 < canonicalTotalWeight s eff)
+    (heff : forall i, 0 <= eff i) :
+    WF (pythonStepOfWF s eff hwf hTotalPos heff) := by
+  exact wf_reachable hwf
+    (pythonStepOfWF_reachable s eff hwf hTotalPos heff)
+
+theorem l4_pythonStepOfWF {n : Nat} (s : Sys n)
+    (eff : Fin n -> Qty) (hwf : WF s)
+    (hTotalPos : 0 < canonicalTotalWeight s eff)
+    (heff : forall i, 0 <= eff i)
+    (hl4 : L4Invariant s) :
+    L4Invariant (pythonStepOfWF s eff hwf hTotalPos heff) := by
+  exact l4_reachable hl4
+    (pythonStepOfWF_reachable s eff hwf hTotalPos heff)
+
+theorem pythonStepOfWF_conservation {n : Nat} (s : Sys n)
+    (eff : Fin n -> Qty) (hwf : WF s)
+    (hTotalPos : 0 < canonicalTotalWeight s eff)
+    (heff : forall i, 0 <= eff i) :
+    accounted (pythonStepOfWF s eff hwf hTotalPos heff) = accounted s := by
+  unfold pythonStepOfWF
+  exact L1_conservation s
+    (pythonRatePlanOfWF s eff hwf hTotalPos heff).toFlowPlan
 
 theorem pythonRatePlan_conservation {n : Nat} (s : Sys n) (eff : Fin n -> Qty)
     (hreservoir : 0 <= s.reservoir)
