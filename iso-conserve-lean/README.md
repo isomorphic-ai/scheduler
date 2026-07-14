@@ -65,6 +65,11 @@ allocation.
   instantiates L1 on that plan.
 - Resolution credit core: `IsoConserve.credit_monotone_under_yield_reachable`
   proves banked credit is non-decreasing over yield-only reachability.
+- Wait-graph L3/detection v2:
+  `IsoConserve.WaitGraph.closedWaitSet_step`,
+  `IsoConserve.WaitGraph.L3_waitComponent_absorbing`, and
+  `IsoConserve.WaitGraph.detection_sound` prove the contentful closed-component
+  deadlock/detection claims from `04b-lean-task.md`.
 
 ## Reusable Monotonicity Kernel
 
@@ -114,6 +119,28 @@ Python-style plan is a verified `RatePlan`.
 threshold finding: a canonical one-process step can make no conversion progress
 while increasing convertible stock.
 
+## Wait-Graph Dynamics V2
+
+`IsoConserve.WaitGraph` is the separate v2 module requested by
+`04b-lean-task.md`. It models finite process and lock identities, `wants`,
+`holds`, computed `runnable`, conversion to `done`, and lock release by done
+processes.
+
+The key predicate is `closedWaitSet s C`: every process in the component `C` is
+unfinished and blocked on a lock held by another process in `C`. From that:
+
+- `closedWaitSet_not_runnable` proves no member is runnable.
+- `done_releases_locks` proves done processes hold no locks after the step.
+- `closedWaitSet_step` proves the closed component is preserved by one step.
+- `L3_waitComponent_absorbing` proves no member becomes runnable and converted
+  progress inside `C` is unchanged.
+- `detection_sound` proves budget floor plus closed wait component is a genuine
+  deadlock signal.
+
+This module proves soundness once a closed wait component is supplied. It does not
+try to discover cycles automatically; that remains a graph-search layer above the
+theorem.
+
 ## What The Plan Abstraction Covers
 
 The abstraction proves L1/L4 for a superset of the Python transition's accounting
@@ -142,6 +169,8 @@ system, not the full Python lock/wait dynamics.
 - Credit is accounted, and stock-to-credit yield/banking is modeled as `YieldPlan`;
   full victimless-resolution behavior remains outside this pass.
 
-The L3 theorem is faithful to Python's empty-table branch, which is a no-op. In this
-model the `done` component is frozen everywhere, so the `not allDone` preservation is
-true for a model-wide reason rather than because lock-release dynamics were analyzed.
+The original plan-kernel L3 theorem is faithful to Python's empty-table branch,
+which is a no-op. In that model the `done` component is frozen everywhere, so the
+`not allDone` preservation is true for a model-wide reason rather than because
+lock-release dynamics were analyzed. `IsoConserve.WaitGraph` supplies the separate
+contentful wait-graph proof.
