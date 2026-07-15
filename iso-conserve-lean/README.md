@@ -11,6 +11,15 @@ lake build
 The package is pinned to Lean `v4.30.0` and intentionally uses only Lean/Std so it
 can build offline in this workspace.
 
+## Provenance
+
+The reviewed Lean branch is `iso-conserve-lean` in
+`git@github.com:isomorphic-ai/scheduler.git`, with local base commit
+`e77bd5c8fbef3b07d52afe26c9e6261dee6fd181` (`Finish theorem 4`). When publishing
+follow-up proof/doc changes, keep `04b-lean-task.md`, `NEXT-TASKS.md`, and
+`REVIEW-by-fable.md` in the same committed tree so paper references have a single
+immutable target.
+
 ## Model
 
 The model uses a finite indexed process set, `Fin n -> Proc`, to avoid structural
@@ -63,15 +72,19 @@ allocation.
   using Python-style quantum, supplied effective weights, and a finite forced
   conversion loop bounded by remaining work. `IsoConserve.pythonRatePlan_conservation`
   instantiates L1 on that plan. `IsoConserve.canonicalPythonStepRel_is_mixedRel`
-  is the bridge theorem: every well-formed positive-weight canonical Python-style
-  step is a verified mixed-system step.
+  is the bridge theorem: every well-formed canonical Python-style flow step
+  (positive effective weight or all-zero-weight fallback) is a verified
+  mixed-system step.
 - Resolution credit core: `IsoConserve.credit_monotone_under_yield_reachable`
   proves banked credit is non-decreasing over yield-only reachability.
 - Wait-graph L3/detection v2:
   `IsoConserve.WaitGraph.closedWaitSet_step`,
-  `IsoConserve.WaitGraph.L3_waitComponent_absorbing`, and
-  `IsoConserve.WaitGraph.detection_sound` prove the contentful closed-component
-  deadlock/detection claims from `04b-lean-task.md`.
+  `IsoConserve.WaitGraph.closedWaitSet_iter`,
+  `IsoConserve.WaitGraph.totalConvertedIn_iter`, and
+  `IsoConserve.WaitGraph.L3_waitComponent_absorbing_iter` prove closed-component
+  absorption and no conversion progress for any finite number of wait-graph steps.
+  `IsoConserve.WaitGraph.detection_sound` packages the supplied floor and closed
+  component facts as a `genuineDeadlock`.
 
 ## Reusable Monotonicity Kernel
 
@@ -117,21 +130,26 @@ wait-graph/effective-rate computation outside the accounting kernel while provin
 that, once those weights are available and have positive total weight, the
 Python-style plan is a verified `RatePlan`. The named bridge theorem
 `canonicalPythonStepRel_is_mixedRel` proves that the canonical Python-style
-transition is an instance of the verified transition system; `wf_pythonStepOfWF`
-and `l4_pythonStepOfWF` then inherit the existing reachable WF/L4 preservation
-theorems for that concrete step.
+transition is an instance of the verified transition system. The all-zero-weight
+Python fallback is represented by `pythonZeroWeightPlan`: it injects no stock from
+the reservoir and still runs the forced conversion loop on stock already held by
+runnable processes. `wf_pythonStepOfWF`, `wf_pythonZeroWeightStepOfWF`,
+`l4_pythonStepOfWF`, and `l4_pythonZeroWeightStepOfWF` inherit the existing
+reachable WF/L4 preservation theorems for those concrete steps.
 
 `IsoConserve.subthreshold_python_noProgress` and
 `IsoConserve.subthreshold_python_convertibleStock_increases` mechanize the L2
 threshold finding: a canonical one-process step can make no conversion progress
-while increasing convertible stock.
+while increasing convertible stock. These two closed examples use `native_decide`,
+so they include Lean's compiler/evaluator and rational kernel operations in the
+trust base; the general theorems above are ordinary kernel-checked proofs.
 
 ## Wait-Graph Dynamics V2
 
 `IsoConserve.WaitGraph` is the separate v2 module requested by
-`04b-lean-task.md`. It models finite process and lock identities, `wants`,
-`holds`, computed `runnable`, conversion to `done`, and lock release by done
-processes.
+`04b-lean-task.md`. It models finite process and lock identities, a `wants` field,
+a `holds` table, computed `runnable`, conversion to `done`, and lock release by
+done processes.
 
 The key predicate is `closedWaitSet s C`: every process in the component `C` is
 unfinished and blocked on a lock held by another process in `C`. From that:
@@ -139,14 +157,40 @@ unfinished and blocked on a lock held by another process in `C`. From that:
 - `closedWaitSet_not_runnable` proves no member is runnable.
 - `done_releases_locks` proves done processes hold no locks after the step.
 - `closedWaitSet_step` proves the closed component is preserved by one step.
-- `L3_waitComponent_absorbing` proves no member becomes runnable and converted
-  progress inside `C` is unchanged.
-- `detection_sound` proves budget floor plus closed wait component is a genuine
-  deadlock signal.
+- `closedWaitSet_iter` proves the closed component is preserved for any finite
+  number of steps.
+- `totalConvertedIn_iter` proves converted progress inside `C` is unchanged for
+  any finite number of steps.
+- `L3_waitComponent_absorbing_iter` is the paper-facing forever-absorption theorem.
+- `detection_sound` records that a supplied nonempty floored closed component has
+  the fields of `genuineDeadlock`; the floor evidence is carried, not derived here.
 
 This module proves soundness once a closed wait component is supplied. It does not
 try to discover cycles automatically; that remains a graph-search layer above the
 theorem.
+
+## Wait-Graph Deviations
+
+`IsoConserve.WaitGraph` is a separate v2 model for closed-component absorption, not
+the full Python lock protocol.
+
+- `wants` is copied unchanged by `step`; no step changes which lock a process wants.
+- `holds` is release-only; done processes release locks, but no process acquires
+  new locks.
+- Deadlocks can persist in-model, but new deadlocks do not form through acquisition.
+- `canConvert` uses computed `runnable` and stock; it does not model acquiring the
+  wanted lock before conversion.
+- `budget` is stored and used by `floored`, but this module does not drain or refill
+  budgets.
+- `blockedOn` requires `q != p`, so single-process self-deadlock is intentionally
+  outside this closed-component theorem.
+- `genuineDeadlock.not_runnable` is derivable from `internally_blocked`; it is kept
+  as a detector-facing convenience field.
+
+The budget-floor evidence and the wait-graph closure evidence currently live in
+different Lean models. The accounting kernel proves blocked stock monotonicity under
+drain dynamics; `WaitGraph` proves closed components are absorbing and
+non-converting. Joining those into one model is the v3 bridge task.
 
 ## What The Plan Abstraction Covers
 
@@ -157,9 +201,12 @@ because it isolates the bookkeeping from the scheduler mechanics.
 
 The canonical weighted split is represented by `RatePlan`, but ordinary `FlowPlan`
 does not require its shares to come from effective rates. Conversion is also
-plan-supplied rather than forced maximal as in Python's `while stock >= cost` loop.
-The quantum rule `min(reservoir, |at_table|)` is abstracted to
-`reservoir_after_nonneg`.
+plan-supplied rather than forced maximal as in Python's `while stock >= cost` loop;
+the canonical `pythonRatePlan` restores forced-maximal conversion for the
+positive-total-weight Python branch, and `pythonZeroWeightPlan` restores the
+all-zero-effective-weight fallback. Plain `FlowPlan` abstracts the quantum rule to
+`reservoir_after_nonneg`; the canonical `pythonQuantum` restores
+`min(reservoir, |at_table|)` for the positive-weight branch.
 
 ## Deliberate Deviations From `iso_conserve.py`
 
@@ -173,6 +220,8 @@ system, not the full Python lock/wait dynamics.
 - The effective-rate recursion is not formalized; `RatePlan` covers the weighted
   partition once weights are supplied, and `pythonRatePlan` is the canonical
   positive-total-weight instance over supplied weights.
+- Python's all-zero-effective-weight fallback is included as a zero-share
+  `FlowPlan`, not as a `RatePlan`.
 - Credit is accounted, and stock-to-credit yield/banking is modeled as `YieldPlan`;
   full victimless-resolution behavior remains outside this pass.
 
