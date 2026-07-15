@@ -219,6 +219,42 @@ def pythonConvert {n : Nat} (s : Sys n) (eff : Fin n -> Qty)
     ((s.procs i).stock + active s (canonicalShare s eff) i)
     (remainingWork (s.procs i))
 
+def pythonZeroWeightConvert {n : Nat} (s : Sys n) (i : Fin n) : Nat :=
+  forcedConvert s.convertCost (s.procs i).stock (remainingWork (s.procs i))
+
+def pythonZeroWeightPlan {n : Nat} (s : Sys n) (hreservoir : 0 <= s.reservoir)
+    (hstock : forall i, 0 <= (s.procs i).stock) :
+    FlowPlan s :=
+  { share := fun _ => 0
+    convert := pythonZeroWeightConvert s
+    reservoir_after_nonneg := by
+      have hsum :
+          sumFin (fun i => active s (fun _ : Fin n => (0 : Qty)) i) = 0 := by
+        calc
+          sumFin (fun i => active s (fun _ : Fin n => (0 : Qty)) i) =
+              sumFin (fun _ : Fin n => (0 : Qty)) := by
+                apply sumFin_congr
+                intro i
+                unfold active
+                by_cases h : s.runnable i
+                · simp [h]
+                · simp [h]
+          _ = 0 := sumFin_zero
+      rw [hsum]
+      grind
+    stock_after_nonneg := by
+      intro i
+      by_cases hr : s.runnable i
+      · unfold active activeNat pythonZeroWeightConvert
+        simp [hr]
+        have hforced := forcedConvert_stock_after_nonneg s.convertCost
+          (remainingWork (s.procs i)) (s.procs i).stock (hstock i)
+        grind
+      · unfold active activeNat
+        simp [hr]
+        have hs := hstock i
+        grind }
+
 theorem pythonConvert_stock_after_nonneg {n : Nat} (s : Sys n)
     (eff : Fin n -> Qty)
     (hreservoir : 0 <= s.reservoir)
@@ -288,12 +324,23 @@ def pythonStepOfWF {n : Nat} (s : Sys n) (eff : Fin n -> Qty)
     (heff : forall i, 0 <= eff i) : Sys n :=
   step s (pythonRatePlanOfWF s eff hwf hTotalPos heff).toFlowPlan
 
+def pythonZeroWeightPlanOfWF {n : Nat} (s : Sys n) (hwf : WF s) :
+    FlowPlan s :=
+  pythonZeroWeightPlan s hwf.reservoir_nonneg hwf.stock_nonneg
+
+def pythonZeroWeightStepOfWF {n : Nat} (s : Sys n) (hwf : WF s) : Sys n :=
+  step s (pythonZeroWeightPlanOfWF s hwf)
+
 def CanonicalPythonStepRel {n : Nat} (s t : Sys n) : Prop :=
-  exists (eff : Fin n -> Qty)
+  (exists (eff : Fin n -> Qty)
     (hwf : WF s)
     (hTotalPos : 0 < canonicalTotalWeight s eff)
     (heff : forall i, 0 <= eff i),
-    t = pythonStepOfWF s eff hwf hTotalPos heff
+    t = pythonStepOfWF s eff hwf hTotalPos heff)
+  \/ (exists (eff : Fin n -> Qty)
+    (hwf : WF s)
+    (_hweightZero : forall i, canonicalWeight s eff i = 0),
+    t = pythonZeroWeightStepOfWF s hwf)
 
 theorem pythonRatePlanOfWF_share_sum {n : Nat} (s : Sys n)
     (eff : Fin n -> Qty) (hwf : WF s)
@@ -328,6 +375,11 @@ theorem pythonStepOfWF_is_verified_step {n : Nat} (s : Sys n)
     StepRel s (pythonStepOfWF s eff hwf hTotalPos heff) := by
   exact ⟨(pythonRatePlanOfWF s eff hwf hTotalPos heff).toFlowPlan, rfl⟩
 
+theorem pythonZeroWeightStepOfWF_is_verified_step {n : Nat} (s : Sys n)
+    (hwf : WF s) :
+    StepRel s (pythonZeroWeightStepOfWF s hwf) := by
+  exact ⟨pythonZeroWeightPlanOfWF s hwf, rfl⟩
+
 theorem pythonStepOfWF_is_verified_mixed_step {n : Nat} (s : Sys n)
     (eff : Fin n -> Qty) (hwf : WF s)
     (hTotalPos : 0 < canonicalTotalWeight s eff)
@@ -338,9 +390,15 @@ theorem pythonStepOfWF_is_verified_mixed_step {n : Nat} (s : Sys n)
 theorem canonicalPythonStepRel_is_stepRel {n : Nat} {s t : Sys n}
     (h : CanonicalPythonStepRel s t) :
     StepRel s t := by
-  rcases h with ⟨eff, hwf, hTotalPos, heff, ht⟩
-  subst ht
-  exact pythonStepOfWF_is_verified_step s eff hwf hTotalPos heff
+  cases h with
+  | inl hpos =>
+      rcases hpos with ⟨eff, hwf, hTotalPos, heff, ht⟩
+      subst ht
+      exact pythonStepOfWF_is_verified_step s eff hwf hTotalPos heff
+  | inr hzero =>
+      rcases hzero with ⟨_eff, hwf, _hweightZero, ht⟩
+      subst ht
+      exact pythonZeroWeightStepOfWF_is_verified_step s hwf
 
 theorem canonicalPythonStepRel_is_mixedRel {n : Nat} {s t : Sys n}
     (h : CanonicalPythonStepRel s t) :
@@ -355,6 +413,12 @@ theorem pythonStepOfWF_reachable {n : Nat} (s : Sys n)
   exact RTC.tail (RTC.refl s)
     (pythonStepOfWF_is_verified_mixed_step s eff hwf hTotalPos heff)
 
+theorem pythonZeroWeightStepOfWF_reachable {n : Nat} (s : Sys n)
+    (hwf : WF s) :
+    RTC MixedRel s (pythonZeroWeightStepOfWF s hwf) := by
+  exact RTC.tail (RTC.refl s)
+    (Or.inl (pythonZeroWeightStepOfWF_is_verified_step s hwf))
+
 theorem wf_pythonStepOfWF {n : Nat} (s : Sys n)
     (eff : Fin n -> Qty) (hwf : WF s)
     (hTotalPos : 0 < canonicalTotalWeight s eff)
@@ -362,6 +426,11 @@ theorem wf_pythonStepOfWF {n : Nat} (s : Sys n)
     WF (pythonStepOfWF s eff hwf hTotalPos heff) := by
   exact wf_reachable hwf
     (pythonStepOfWF_reachable s eff hwf hTotalPos heff)
+
+theorem wf_pythonZeroWeightStepOfWF {n : Nat} (s : Sys n)
+    (hwf : WF s) :
+    WF (pythonZeroWeightStepOfWF s hwf) := by
+  exact wf_reachable hwf (pythonZeroWeightStepOfWF_reachable s hwf)
 
 theorem l4_pythonStepOfWF {n : Nat} (s : Sys n)
     (eff : Fin n -> Qty) (hwf : WF s)
@@ -372,6 +441,11 @@ theorem l4_pythonStepOfWF {n : Nat} (s : Sys n)
   exact l4_reachable hl4
     (pythonStepOfWF_reachable s eff hwf hTotalPos heff)
 
+theorem l4_pythonZeroWeightStepOfWF {n : Nat} (s : Sys n)
+    (hwf : WF s) (hl4 : L4Invariant s) :
+    L4Invariant (pythonZeroWeightStepOfWF s hwf) := by
+  exact l4_reachable hl4 (pythonZeroWeightStepOfWF_reachable s hwf)
+
 theorem pythonStepOfWF_conservation {n : Nat} (s : Sys n)
     (eff : Fin n -> Qty) (hwf : WF s)
     (hTotalPos : 0 < canonicalTotalWeight s eff)
@@ -380,6 +454,12 @@ theorem pythonStepOfWF_conservation {n : Nat} (s : Sys n)
   unfold pythonStepOfWF
   exact L1_conservation s
     (pythonRatePlanOfWF s eff hwf hTotalPos heff).toFlowPlan
+
+theorem pythonZeroWeightStepOfWF_conservation {n : Nat} (s : Sys n)
+    (hwf : WF s) :
+    accounted (pythonZeroWeightStepOfWF s hwf) = accounted s := by
+  unfold pythonZeroWeightStepOfWF
+  exact L1_conservation s (pythonZeroWeightPlanOfWF s hwf)
 
 theorem pythonRatePlan_conservation {n : Nat} (s : Sys n) (eff : Fin n -> Qty)
     (hreservoir : 0 <= s.reservoir)

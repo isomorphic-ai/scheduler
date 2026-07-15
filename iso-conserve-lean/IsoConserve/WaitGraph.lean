@@ -223,6 +223,32 @@ theorem totalConvertedIn_step_eq_of_closed {n m : Nat} {s : WGState n m}
       · simp [h] at hp
     simp [hf]
 
+def stepN {n m : Nat} : Nat -> WGState n m -> WGState n m
+  | 0, s => s
+  | k + 1, s => stepN k (step s)
+
+theorem closedWaitSet_iter {n m : Nat} {s : WGState n m}
+    {C : Pid n -> Bool} (k : Nat) (hC : closedWaitSet s C) :
+    closedWaitSet (stepN k s) C := by
+  induction k generalizing s with
+  | zero =>
+      exact hC
+  | succ k ih =>
+      exact ih (closedWaitSet_step hC)
+
+theorem totalConvertedIn_iter {n m : Nat} {s : WGState n m}
+    {C : Pid n -> Bool} (k : Nat) (hC : closedWaitSet s C) :
+    totalConvertedIn C (stepN k s) = totalConvertedIn C s := by
+  induction k generalizing s with
+  | zero =>
+      rfl
+  | succ k ih =>
+      calc
+        totalConvertedIn C (stepN (k + 1) s) =
+            totalConvertedIn C (stepN k (step s)) := rfl
+        _ = totalConvertedIn C (step s) := ih (closedWaitSet_step hC)
+        _ = totalConvertedIn C s := totalConvertedIn_step_eq_of_closed hC
+
 theorem L3_waitComponent_absorbing {n m : Nat} {s : WGState n m}
     {C : Pid n -> Bool} (hC : closedWaitSet s C)
     (_nonempty : exists p, C p = true) :
@@ -232,6 +258,16 @@ theorem L3_waitComponent_absorbing {n m : Nat} {s : WGState n m}
   · intro p hp
     exact closedWaitSet_not_runnable (closedWaitSet_step hC) hp
   · exact totalConvertedIn_step_eq_of_closed hC
+
+theorem L3_waitComponent_absorbing_iter {n m : Nat} {s : WGState n m}
+    {C : Pid n -> Bool} (k : Nat) (hC : closedWaitSet s C)
+    (_nonempty : exists p, C p = true) :
+    (forall p, C p = true -> ¬ runnable (stepN k s) p)
+      /\ totalConvertedIn C (stepN k s) = totalConvertedIn C s := by
+  constructor
+  · intro p hp
+    exact closedWaitSet_not_runnable (closedWaitSet_iter k hC) hp
+  · exact totalConvertedIn_iter k hC
 
 theorem detection_sound {n m : Nat} {s : WGState n m}
     {C : Pid n -> Bool} (hC : closedWaitSet s C)
