@@ -85,6 +85,14 @@ allocation.
   absorption and no conversion progress for any finite number of wait-graph steps.
   `IsoConserve.WaitGraph.detection_sound` packages the supplied floor and closed
   component facts as a `genuineDeadlock`.
+- Budget/wait bridge v3:
+  `IsoConserve.BudgetWait.budget_drop_implies_blocked` proves that a one-step
+  budget decrease can only come from computed blocking.
+  `IsoConserve.BudgetWait.floor_after_full_drain_window_implies_blockedThroughout`
+  proves that draining from full budget to zero over exactly the budget window
+  implies the process was blocked throughout. The paper-facing theorem
+  `IsoConserve.BudgetWait.detection_sound_with_budget_evidence` combines this
+  budget history with closed-component absorption.
 
 ## Reusable Monotonicity Kernel
 
@@ -190,7 +198,34 @@ the full Python lock protocol.
 The budget-floor evidence and the wait-graph closure evidence currently live in
 different Lean models. The accounting kernel proves blocked stock monotonicity under
 drain dynamics; `WaitGraph` proves closed components are absorbing and
-non-converting. Joining those into one model is the v3 bridge task.
+non-converting. `IsoConserve.BudgetWait` is the separate v3 bridge model that joins
+computed blocking with detector budget drain/refill.
+
+## Budget/Wait Bridge V3
+
+`IsoConserve.BudgetWait` is the `04c-lean-task.md` bridge model. It keeps the
+finite lock/wait structure, computes `runnable` from `wants`/`holds`, and adds
+detector budget dynamics:
+
+- converting processes refill `budget` to `budgetCap`;
+- blocked non-converting processes drain one budget unit;
+- unblocked non-converting processes leave budget unchanged;
+- done processes release locks.
+
+The main evidence theorem is
+`floor_after_full_drain_window_implies_blockedThroughout`: if a process starts a
+witness interval at full budget and reaches zero after exactly `budgetCap` steps,
+then it was blocked at every step in that interval. This is the theorem that makes
+the floor evidence load-bearing.
+
+`detection_sound_with_budget_evidence` packages the end-to-end certificate for a
+supplied closed component with a common budget window `k`: the component remains
+closed, is floored at the end, every member was blocked throughout the window, and
+converted progress inside the component is unchanged.
+
+V3 still deliberately omits lock acquisition and automatic cycle discovery. It also
+uses a same-`budgetCap` hypothesis for the component-level theorem; removing that is
+a cleanup theorem, not required for the first bridge.
 
 ## What The Plan Abstraction Covers
 
