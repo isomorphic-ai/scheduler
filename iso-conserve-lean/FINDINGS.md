@@ -123,3 +123,22 @@
    `L3_waitComponent_absorbing_iter` lift the one-step closed-component theorem to
    any finite number of `WaitGraph.step`s, so the L3 "absorbing" wording no longer
    relies on the reader to infer the induction.
+
+15. The budget floor becomes load-bearing only with a full drain window.
+
+   `IsoConserve.BudgetWait` joins computed wait-graph blocking with detector budget
+   drain/refill. The one-step theorem `budget_drop_implies_blocked` proves that a
+   strict budget decrease can only occur in the blocked branch. The finite-window
+   theorem `floor_after_full_drain_window_implies_blockedThroughout` proves the
+   important direction: if a process starts at full budget and reaches zero after
+   exactly its budget window, then it was blocked at every step in that window.
+   Final floor alone is intentionally not claimed.
+
+16. End-to-end detector evidence is now packaged, with explicit v3 boundaries.
+
+   `detection_sound_with_budget_evidence` combines a supplied closed wait component,
+   final floor, the full-window budget theorem, and no-conversion absorption into an
+   `evidencedDeadlock` certificate. The first component theorem assumes a common
+   `budgetCap = k` for every member of the component, and `BudgetWait` still omits
+   lock acquisition and automatic cycle discovery. These are documented boundaries,
+   not hidden proof assumptions.
