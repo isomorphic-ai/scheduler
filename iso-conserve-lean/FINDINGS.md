@@ -202,3 +202,10 @@
    and `agency_invariant` states that a local account increase implies the outside
    account strictly decreased. These are conservation corollaries, not yet the full
    dependency-utility theorem about hoarding.
+
+23. The flexibility/middle-way reading now has its conservation identity.
+
+   `IsoConserve.Flexibility` models a collapse from `potential` to `actual` and
+   proves whole conservation, potential monotonicity, actual monotonicity, and the
+   balanced delta identity. This mechanizes the conserved core of reading 4.7 while
+   leaving phantom races and carried distributions as empirical engine evidence.

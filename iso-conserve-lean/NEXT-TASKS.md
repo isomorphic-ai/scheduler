@@ -289,15 +289,12 @@ member's starting budget floors the closed component.
    `alignment_invariant`, and `agency_invariant`. These are citation-facing L1
    corollaries over `MixedRel`: reachable ledger equality, local/outside transfer
    balance, and local gain paid for by outside-account decrease.
-3. **4.7 middle way: the collapse conservation identity.** Tiny module
-   (`Flexibility.lean`): a decision state `(potential : Qty, actual :
-   Qty)` with a `collapse` step moving q from potential to actual;
-   theorems: whole invariant, potential monotone non-increasing, actual
-   monotone non-decreasing, and the "two sides of one event" statement
-   (Δpotential = -Δactual). It is L1 in miniature and ~40 lines — but it
-   is the *provable core* of reading 4.7, and the module docstring must
-   say plainly: the phantom-race and carried-distribution results remain
-   empirical (`iso_flex.py`); Lean gets the conservation identity only.
+3. **Completed: 4.7 middle way, the collapse conservation identity.**
+   `IsoConserve.Flexibility` defines a potential/actual collapse step and proves
+   whole conservation, potential monotonicity, actual monotonicity, and the
+   balanced-delta identity. The module states the boundary plainly: phantom races
+   and carried distributions remain empirical (`iso_flex.py`); Lean gets the
+   conservation identity only.
 
 ## Tier B — the flow module (write `04d-lean-task.md` FIRST; the largest true gap)
 

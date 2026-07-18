@@ -143,6 +143,21 @@ under the names the paper can cite:
 - `agency_invariant`: if a local account increases in a mixed step, the outside
   account strictly decreases; private gain is paid for inside the conserved ledger.
 
+## Flexibility Collapse
+
+`IsoConserve.Flexibility` formalizes the conservation identity for the paper's
+middle-way reading. A `collapse` step moves a non-negative amount from `potential`
+to `actual`, with these named theorems:
+
+- `collapse_whole_invariant`: potential plus actual is conserved.
+- `collapse_potential_monotone`: potential does not increase.
+- `collapse_actual_monotone`: actual does not decrease.
+- `collapse_actual_gain_eq_potential_loss` and `collapse_delta_balance`: the two
+  apparent changes are the same event viewed from opposite sides.
+
+This module deliberately covers only the conservation identity. The phantom-race
+and carried-distribution demonstrations remain empirical engine results.
+
 ## Noether Slice
 
 `IsoConserve.Noether` contains the first formal slice of the discrete Noether
