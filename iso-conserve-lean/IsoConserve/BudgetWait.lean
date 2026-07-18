@@ -339,13 +339,19 @@ theorem observed_floor_after_window_start_implies_evidence {n m : Nat}
       (s0 := s0) (p := p) (start := start) (k := observedAt - start)
       hbudget hfloor_window hwf
 
+theorem blocked_of_closed {n m : Nat} {s : BWState n m}
+    {C : Pid n -> Bool} (hC : closedWaitSet s C)
+    {p : Pid n} (hp : C p = true) :
+    blocked s p := by
+  rcases (hC p hp).2 with ⟨q, _hq, hblocked⟩
+  exact ⟨q, hblocked⟩
+
 theorem closedWaitSet_not_runnable {n m : Nat} {s : BWState n m}
     {C : Pid n -> Bool} (hC : closedWaitSet s C)
     {p : Pid n} (hp : C p = true) :
     ¬ runnable s p := by
   intro hr
-  rcases (hC p hp).2 with ⟨q, _hq, hblocked⟩
-  exact hr.2 ⟨q, hblocked⟩
+  exact hr.2 (blocked_of_closed hC hp)
 
 theorem canConvert_false_of_closed {n m : Nat} {s : BWState n m}
     {C : Pid n -> Bool} (hC : closedWaitSet s C)
@@ -415,6 +421,49 @@ theorem closedWaitSet_iter {n m : Nat} {s : BWState n m}
   | succ k ih =>
       exact ih (closedWaitSet_step hC)
 
+theorem closed_member_budget_step {n m : Nat} {s : BWState n m}
+    {C : Pid n -> Bool} (hC : closedWaitSet s C)
+    {p : Pid n} (hp : C p = true) :
+    ((step s).procs p).budget = (s.procs p).budget - 1 := by
+  unfold step stepProc budgetAfter
+  have hb := blocked_of_closed hC hp
+  have hnot := canConvert_false_of_closed hC hp
+  simp [hnot, hb]
+
+theorem closed_member_budget_after {n m : Nat} {s : BWState n m}
+    {C : Pid n -> Bool} (k : Nat) (hC : closedWaitSet s C)
+    {p : Pid n} (hp : C p = true) :
+    ((stepN k s).procs p).budget = (s.procs p).budget - k := by
+  induction k generalizing s with
+  | zero =>
+      simp [stepN]
+  | succ k ih =>
+      calc
+        ((stepN (k + 1) s).procs p).budget =
+            ((stepN k (step s)).procs p).budget := rfl
+        _ = ((step s).procs p).budget - k :=
+            ih (s := step s) (closedWaitSet_step hC)
+        _ = ((s.procs p).budget - 1) - k := by
+            rw [closed_member_budget_step hC hp]
+        _ = (s.procs p).budget - (k + 1) := by
+            simp [Nat.sub_sub, Nat.add_comm]
+
+theorem closed_member_floored_within {n m : Nat} {s : BWState n m}
+    {C : Pid n -> Bool} (k : Nat) (hC : closedWaitSet s C)
+    {p : Pid n} (hp : C p = true)
+    (hbound : (s.procs p).budget <= k) :
+    ((stepN k s).procs p).budget = 0 := by
+  rw [closed_member_budget_after k hC hp]
+  exact Nat.sub_eq_zero_of_le hbound
+
+theorem closed_floored_within {n m : Nat} {s : BWState n m}
+    {C : Pid n -> Bool} {k : Nat}
+    (hC : closedWaitSet s C)
+    (hbound : forall p, C p = true -> (s.procs p).budget <= k) :
+    floored (stepN k s) C := by
+  intro p hp
+  exact closed_member_floored_within k hC hp (hbound p hp)
+
 def totalConvertedIn {n m : Nat} (C : Pid n -> Bool)
     (s : BWState n m) : Qty :=
   sumFin (fun p => if C p then ((s.procs p).converted : Qty) else 0)
@@ -480,6 +529,31 @@ theorem detection_sound_with_budget_evidence {n m : Nat}
     exact floor_after_exact_budget_window_implies_blockedThroughout
       (s := s0) (p := p) hbudget hfloor_p hwf
   · exact totalConvertedIn_iter k hC0
+
+theorem closed_wait_set_detected_within_budget {n m : Nat}
+    {s0 : BWState n m} {C : Pid n -> Bool} {k : Nat}
+    (hC0 : closedWaitSet s0 C)
+    (hbound : forall p, C p = true -> (s0.procs p).budget <= k)
+    (nonempty : exists p, C p = true) :
+    evidencedDeadlock s0 k C := by
+  constructor
+  · exact nonempty
+  · exact closedWaitSet_iter k hC0
+  · exact closed_floored_within hC0 hbound
+  · intro p hp j hj
+    exact blocked_of_closed (closedWaitSet_iter j hC0) hp
+  · exact totalConvertedIn_iter k hC0
+
+theorem closed_wait_set_detected_at_common_budget {n m : Nat}
+    {s0 : BWState n m} {C : Pid n -> Bool} {k : Nat}
+    (hC0 : closedWaitSet s0 C)
+    (hbudget : forall p, C p = true -> (s0.procs p).budget = k)
+    (nonempty : exists p, C p = true) :
+    evidencedDeadlock s0 k C := by
+  exact closed_wait_set_detected_within_budget hC0 (by
+    intro p hp
+    rw [hbudget p hp]
+    exact Nat.le_refl k) nonempty
 
 end
 end BudgetWait

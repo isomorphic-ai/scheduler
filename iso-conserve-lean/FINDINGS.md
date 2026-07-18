@@ -181,3 +181,14 @@
    make the obstruction concrete for `MixedRel`. Therefore the strong "Q is the
    unique forced charge" reading is false without additional normalization or
    observability assumptions.
+
+21. Closed wait components now have bounded detector completeness.
+
+   `closed_member_budget_after` proves that a member of a closed wait component
+   drains exactly one Nat budget unit per bridge step:
+   `budget_after_k = budget_start - k`. `closed_floored_within` lifts this to the
+   component: if the observation bound is at least every member's starting budget,
+   the component is floored. `closed_wait_set_detected_within_budget` packages the
+   completeness certificate directly as an `evidencedDeadlock`, using closed-set
+   absorption for blocked history and no-conversion. This is logical-attempt
+   latency, not elapsed time.
