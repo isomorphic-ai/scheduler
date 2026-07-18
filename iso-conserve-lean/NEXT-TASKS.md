@@ -325,6 +325,9 @@ member's starting budget floors the closed component.
 
 ## Tier C — the distribution module (write `04e-lean-task.md` FIRST)
 
+**Status:** task file drafted as `04e-lean-task.md`; implementation is gated on
+review of that task file.
+
 5. **4.5: PN-counter conservation across partition.** Self-contained
    module, no scheduler imports: per-node grow-only `pos/neg : Node →
    Nat`, `value = Σpos − Σneg`, `merge = pointwise max`. Prove: merge is
