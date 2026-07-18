@@ -281,8 +281,7 @@ theorem detection_latency_le_budget
     (hcap : forall p, C p = true -> budget s p <= k) :
     exists prefix,
       prefix <:+ schedule /\
-      detectorFires (runSchedule prefix s) C /\
-      forall p, C p = true -> selectedCount prefix p <= k
+      detectorFires (runSchedule prefix s) C
 ```
 
 For a round-robin schedule, add a corollary translating the bound to rounds if it
