@@ -485,6 +485,9 @@ questions, and implementation order after review.
    ship into the repo. The feedback file quotes the claims' shapes; the
    task files should quote the claims.
 
-   **Status:** WP1+WP2 task file drafted as `04d-core-trace-task.md`, anchored to
-   `paper08-expanded.md` §4 and the Pro feedback. Implementation is now gated on
-   review of that task file.
+   **Status:** WP1+WP2 implemented in `IsoConserve.CoreTrace` after Review #7's
+   fixes to `04d-core-trace-task.md`. The module exports the shared
+   `CoreProc`/`CoreState` shape, `WFState`, `ExecRel`/`CureRel`/`CoreRel`, the
+   repaired L2 statements, global ordinary-execution L3, cure escape witness, and
+   trace-derived L4 theorem. Next downstream action is to revise the remaining
+   approved-with-fixes task files against this shared core before their code starts.

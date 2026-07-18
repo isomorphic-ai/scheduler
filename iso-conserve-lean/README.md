@@ -52,6 +52,15 @@ non-runnable processes have zero weight in the canonical split. Plain `FlowPlan`
 remain deliberately unconstrained so L1/L4 apply to any accounting-balanced
 allocation.
 
+`IsoConserve.CoreTrace` is the unified WP1/WP2 core. Its `CoreState` is both a
+ledger and a dependency graph: process stock, credit, base rate, detector budget,
+restart-local progress, `wants`, and `holds` live in one record. Public transitions
+use `WFState`, with ordinary execution separated from cure steps as `ExecRel`,
+`CureRel`, and `CoreRel`. `ExecRel` covers work, acquire, and normal release;
+`CureRel` covers drain, yield, route, and claim release. The work step does not
+implicitly release locks; release is an explicit event, which keeps the L3
+ordinary-execution/cure distinction visible.
+
 ## Paper Law Map
 
 - L1 conservation: `IsoConserve.L1_conservation`
@@ -108,6 +117,23 @@ allocation.
   at least as large as each member's starting budget. The paper-facing soundness
   theorem `IsoConserve.BudgetWait.detection_sound_with_budget_evidence` combines
   exact-window budget history with closed-component absorption.
+- Unified core/trace WP1-WP2:
+  `IsoConserve.CoreTrace.core_step_conserves_accounted` and
+  `IsoConserve.CoreTrace.core_reachable_conserves_accounted` prove L1 over the
+  unified `CoreRel`; `core_step_preserves_totalQ` and
+  `core_reachable_preserves_totalQ` carry the declared total.
+  `CoreTrace.no_progress_convertible_stock_monotone` proves the repaired L2 over
+  explicit detector no-progress drain/yield steps, while
+  `CoreTrace.blocked_stock_monotone` uses the blocked-preserving relation required
+  by Review #7. `CoreTrace.unrestricted_l2_is_false` restates the sub-threshold
+  counterexample on the unified state.
+  `CoreTrace.deadlock_exec_fixed` proves global deadlock is fixed under ordinary
+  `ExecRel` reachability, and `CoreTrace.cure_can_break_absorption` gives a
+  concrete release-claim witness showing cure can intentionally escape absorption.
+  `CoreTrace.stock_credit_eq_initial_add_integral`,
+  `CoreTrace.L4_stock_is_trace_integral`, and
+  `CoreTrace.cached_integral_eq_trace_integral` provide the trace-derived L4
+  surface via `flowIntegral`.
 
 ## Paper Claims Surface
 
@@ -117,8 +143,8 @@ already exist, such as `PaperClaims.L1_conservation`,
 `PaperClaims.detection_complete_bounded`, `PaperClaims.resolution_credit_core`,
 `PaperClaims.positive_trust_survives_loss`, and the current invariant aliases.
 
-Review-gated future claims from `04d` through `04j` should be added there only
-after their proof modules land; missing future claims are tracked in
+Review-gated future claims from downstream `04e` through `04j` should be added
+there only after their proof modules land; missing future claims are tracked in
 `NEXT-TASKS.md` and `REVIEW-QUEUE.md`, not represented by placeholders.
 
 ## Reusable Monotonicity Kernel

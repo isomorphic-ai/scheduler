@@ -69,6 +69,18 @@ headline_theorems=(
   IsoConserve.WaitGraph.detection_sound
   IsoConserve.BudgetWait.detection_sound_with_budget_evidence
   IsoConserve.BudgetWait.closed_wait_set_detected_within_budget
+  IsoConserve.CoreTrace.core_step_conserves_accounted
+  IsoConserve.CoreTrace.core_reachable_conserves_accounted
+  IsoConserve.CoreTrace.no_progress_convertible_stock_monotone
+  IsoConserve.CoreTrace.blocked_stock_monotone
+  IsoConserve.CoreTrace.deadlock_exec_fixed
+  IsoConserve.CoreTrace.closed_wait_set_exec_absorbing
+  IsoConserve.CoreTrace.closed_wait_set_converted_total_fixed
+  IsoConserve.CoreTrace.cure_preserves_accounted
+  IsoConserve.CoreTrace.cure_can_break_absorption
+  IsoConserve.CoreTrace.stock_credit_eq_initial_add_integral
+  IsoConserve.CoreTrace.L4_stock_is_trace_integral
+  IsoConserve.CoreTrace.unrestricted_l2_is_false
   IsoConserve.Noether.mixedRel_accounted_clockFree
   IsoConserve.epistemic_invariant
   IsoConserve.alignment_invariant
@@ -106,7 +118,7 @@ if ! lake build >"$build_log" 2>&1; then
 fi
 
 scan_status=PASS
-if rg -n "\\bsorry\\b|\\badmit\\b|axiom " IsoConserve >"$scan_log"; then
+if rg -n "\\b(sorry|admit|axiom)\\b" IsoConserve >"$scan_log"; then
   scan_status=FAIL
 else
   : >"$scan_log"
@@ -178,7 +190,7 @@ fi
 | L1 conservation | `IsoConserve.L1_conservation`, reachable accounting corollaries | proved | plan-abstracted kernel |
 | L2 monotonicity | `IsoConserve.blocked_stock_monotone`, `IsoConserve.L2_drain_monotone` | proved | repaired blocked/drain scope |
 | L3 absorption | `IsoConserve.L3_absorbing`, `IsoConserve.WaitGraph.L3_waitComponent_absorbing_iter` | proved | old kernel plus supplied closed wait component |
-| L4 stock/integral | `IsoConserve.L4_stock_is_integral`, `IsoConserve.l4_reachable` | proved | cached field, not yet trace-derived |
+| L4 stock/integral | `IsoConserve.L4_stock_is_integral`, `IsoConserve.l4_reachable`, `IsoConserve.CoreTrace.L4_stock_is_trace_integral` | proved | old kernel uses cached field; CoreTrace is trace-derived |
 | Detection bounded completeness | `IsoConserve.BudgetWait.closed_wait_set_detected_within_budget` | proved | supplied closed component/window evidence |
 | Detection soundness with evidence | `IsoConserve.BudgetWait.detection_sound_with_budget_evidence` | proved | supplied closed component |
 | Resolution credit core | `IsoConserve.credit_monotone_under_yield_reachable` | proved | stock-to-credit core, not full restart yield |
@@ -188,7 +200,7 @@ fi
 | Flexibility collapse | `IsoConserve.Flexibility.collapse_whole_invariant` | proved | conservation identity only |
 | Noether slice | `IsoConserve.Noether.mixedRel_accounted_clockFree` | proved | uniqueness obstructed |
 | PaperClaims current surface | `IsoConserve.PaperClaims.*` current aliases | proved | future claims omitted until source modules land |
-| Unified core trace | `04d-core-trace-task.md` | review-gated | not implemented |
+| Unified core trace | `IsoConserve.CoreTrace.core_reachable_conserves_accounted`, `IsoConserve.CoreTrace.deadlock_exec_fixed`, `IsoConserve.CoreTrace.L4_stock_is_trace_integral` | proved | shared surface; downstream modules still need to import it |
 | Rate routing | `04f-rate-routing-task.md` | review-gated | not implemented |
 | PN-counter distribution | `04e-lean-task.md` | review-gated | not implemented |
 | Detector/progress signal | `04g-detector-progress-task.md` | review-gated | not implemented |

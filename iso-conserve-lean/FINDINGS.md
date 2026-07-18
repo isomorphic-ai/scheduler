@@ -209,3 +209,38 @@
    proves whole conservation, potential monotonicity, actual monotonicity, and the
    balanced delta identity. This mechanizes the conserved core of reading 4.7 while
    leaving phantom races and carried distributions as empirical engine evidence.
+
+24. The unified core/trace surface now exists beside the older models.
+
+   `IsoConserve.CoreTrace` defines one `CoreState` carrying both the Q ledger and
+   the wait graph: stock, credit, base rate, detector budget, restart-local
+   converted work, wants, holds, reserve, and total Q. The public relations are
+   `ExecRel`, `CureRel`, and `CoreRel` over `WFState`. L1 is proved as
+   `core_step_conserves_accounted` and `core_reachable_conserves_accounted`; L4 is
+   trace-derived by `stock_credit_eq_initial_add_integral` and
+   `L4_stock_is_trace_integral`, with `flowIntegral` computed from `StepEvent`
+   history rather than read from a state cache.
+
+25. Review #7's L2/L3 repairs are encoded in the unified core.
+
+   The old unrestricted L2 reading is restated as
+   `CoreTrace.unrestricted_l2_is_false` on the new state. The positive monotonicity
+   theorem is deliberately restricted: `no_progress_convertible_stock_monotone`
+   covers detector no-progress drain/yield traces, and
+   `blocked_stock_monotone` ranges over `BlockedPreservingRel` so lock release
+   cannot silently turn a blocked process into a runnable one mid-proof. L3 is
+   global (`Deadlocked = atTableEmpty ∧ ¬ allDone`) and ordinary-execution-only:
+   `deadlock_exec_fixed` proves absorption for `ExecRel`, while
+   `cure_can_break_absorption` gives a checked release-claim witness showing the
+   cure can intentionally leave the absorbing state.
+
+26. CoreTrace is a shared surface, not the finished downstream modules.
+
+   The compatibility exports `old_L1_conservation_lifts`,
+   `old_blocked_stock_monotone_lifts`, `old_budget_wait_detection_lifts`, and
+   `old_yield_conservation_lifts` are documentation theorems today. WP3/WP4/WP5
+   still need to import `CoreTrace` and replace their draft-local state sketches
+   with this record. In particular, rate routing must derive route deltas from the
+   wait graph, the detector must define scheduled attempts over the shared budget,
+   and resolution yield must connect restart-local work banking to explicit claim
+   release.
