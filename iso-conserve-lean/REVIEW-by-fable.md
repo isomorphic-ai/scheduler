@@ -581,3 +581,186 @@ detection module partition the graph between them. That sentence should
 end up in the combined paper.
 
 — Fable, 2026-07-18
+
+---
+
+# Review #7 (2026-07-19): the seven task files (04d–04j) — the WP1–7 gate
+
+*Reviewer: Fable. 04d and 04i reviewed directly; 04e/f/g/h/j via a
+delegated adversarial pass with the queue's key questions (findings
+verified in spirit, credited inline). Verdict summary: 04e APPROVE;
+all others APPROVE-WITH-FIXES. Coding may start on 04d as soon as its
+edits are committed (queue rule: task-file fix commits precede code).
+FIVE false-as-written required theorems were found across four files —
+the 04b-W2/04c-B1 class — plus one stale-premise task. Every fix is a
+statement or definition edit; no architecture changes.*
+
+## 04d — Core trace (APPROVE-WITH-FIXES) — gates everything
+
+1. **HIGH, false as written:** C2 `blocked_stock_monotone` over
+   `RTC CoreRel`. The old model froze `runnable`, so `blocked s p`
+   persisted for free. The new core acquires/releases locks: a blocked
+   process can be unblocked mid-trace (release → unblock → flow) and its
+   stock rises. Repair fork, pre-decided: state it with
+   blocked-THROUGHOUT (BudgetWait's `blockedThroughout` pattern) or over
+   a blockedness-preserving sub-relation. Do NOT repair by re-freezing
+   `runnable` (undoes WP1) or by weakening to vacuity (Review #1's
+   L2_monotone failure mode).
+2. **HIGH, definition pins:** `deadlock_exec_fixed` (state equality
+   under `RTC ExecRel`) is only the paper's L3 if (a) `Deadlocked` is
+   GLOBAL (`atTableEmpty ∧ ¬allDone`), not per-component, and (b) CoreWF
+   or step preservation carries `done_holds_nothing` — otherwise
+   `releaseNormally` by a done lock-holder changes state and
+   un-deadlocks via ExecRel, falsifying equality AND absorption. The
+   prover will happily prove a per-component or invariant-free variant
+   of something else; pin the definitions in the task file.
+3. LOW: `closedDependencySet`/`ClosedDependencySet` casing; rg pattern
+   `"sorry|admit|axiom"` false-positives on prose — use word bounds.
+4. OWNERSHIP: `closed_wait_set_exec_absorbing` is owned by 04d; 04g
+   must alias, not re-prove (see 04g.4).
+
+## 04e — PN-counter (APPROVE)
+
+Key question passes: conservation is pointwise-max over per-node
+ledgers; the false sum-theorem is explicitly forbidden; ACI +
+order-independence present; no false statements found. Lows only:
+garbled acceptance wording on Std/helpers (L310 vs L28); schematic
+binders on the two `partition_*_le_heal` lemmas; add the
+reviewed-before-code acceptance item for uniformity; note `funext` need
+on `Fin n → Nat` fields.
+
+## 04f — Rate routing (APPROVE-WITH-FIXES)
+
+Key questions pass (effectiveRate vs routedRate separated; cycles
+STRANDED in `routed + stranded = total base`, not erased).
+
+1. **HIGH, false as written:** `blocked_rate_reaches_holder`,
+   `blocked_rate_reaches_root`, `multiple_waiters_sum_not_max` (and
+   `routedRate_nonneg`/`strandedRate_nonneg` outright) fail with any
+   negative `baseRate` elsewhere — `Qty = Rat`. Fix: global
+   `∀ p, 0 ≤ baseRate` or quantify over `WFState` (04d's `rate_nonneg`).
+2. **HIGH, false as written:** `remove_wait_edge_restores_base_rate`
+   fails when the holder `h` is itself still blocked (its routedRate is
+   0, not baseRate). Needs `runnable h` after edge removal.
+3. MEDIUM: `destination` is unspecified for `done` processes — one
+   choice falsifies the keystone conservation, the other mislabels
+   finished procs as stranded. Restrict sums to `unfinished` or require
+   `baseRate = 0` on done; say which.
+4. MEDIUM: `sameWaitGraph` (no_stored_boost_state) must include the
+   runnable/done predicate, not just edges.
+5. LOW: `from` is a Lean 4 reserved keyword in the `reaches` sketch;
+   `reaches` must be reflexive and share `waitsOn`'s successor;
+   `canonical_priority_inversion_cannot_form` is `...`-elided — make it
+   concrete enough to fail. The 10/13–3/13 rationals verify against
+   iso_flow.py's FLOW scenario (1/9/3) — cite that exact scenario, not
+   the deadlock scenario's 5.
+6. NOTE: downstream `acyclicFrom p` is the right hypothesis; add a
+   sentence so nobody "strengthens" it to upstream acyclicity.
+
+## 04g — Detector + SIG_PROGRESS (APPROVE-WITH-FIXES)
+
+Key questions pass (all bounds in attempts/selections/rounds; liar
+handling in reputation, outside soundness; clock-free fairness).
+
+1. **HIGH, false as written:** `periodic_conversion_never_floors`
+   concludes nonzero budget for all `j ≤ horizon` from `0 < budgetCap`
+   alone — at `j = 0` the budget may already be 0. Needs
+   `budget s p = budgetCap` (or ≥ window) initially;
+   `live_process_not_detected` inherits the fix.
+2. MEDIUM: two execution drivers (synchronous `stepN` in §5,
+   per-selection `runSchedule` in §6) with different conversion-window
+   semantics — the theorems won't compose across them. Pick the
+   schedule-driven one and restate §5 per-selection, or bridge
+   explicitly.
+3. MEDIUM: no namespace given, and the sketch names collide with
+   existing `BudgetWait`/`WaitGraph`/`PaperClaims` declarations
+   (`detector_sound` vs `detection_sound` vs 04j's list). Specify
+   namespace + reconcile via DELTA-AUDIT before coding.
+4. LOW: `closed_wait_set_exec_absorbing` — alias 04d's (ownership).
+   `detection_latency_le_budget` is elided — make concrete.
+5. NOTE: `detector_sound`'s floor conjunct is not load-bearing (closure
+   alone suffices) — the FINDINGS candidate admits it; carry into
+   README so the paper doesn't imply otherwise.
+
+## 04h — Resolution yield (APPROVE-WITH-FIXES)
+
+Key questions pass (restart-local vs cumulative split with
+monotonicity; concrete `ReleaseWitness`; livelock contrast as variant
+function).
+
+1. **HIGH, Zeno-false as written:**
+   `positive_credit_gain_finite_requirement_eventually_completes` over
+   `Qty = Rat` admits geometrically shrinking gains — credit rises
+   forever, completion never comes. Quantize the gain
+   (`creditGainAt ≥ convertCost` or Nat credit units) AND state the
+   mechanism link: the variant works via `restart_has_base_plus_credit`
+   funding strictly longer runs against finite `workNeeded`; as
+   sketched the hypotheses don't imply the conclusion.
+2. MEDIUM: `yield_breaks_closed_component` is true only under
+   release-without-instant-regrant. Pin `resolutionYield`'s semantics:
+   release leaves the lock unheld; acquisition is a separate step.
+3. MEDIUM: CoreProc drift — 04h's record drops 04d's `baseRate` and
+   omits 04g's budget fields while using them (`budget y = budgetCap y
+   + creditUnits y`). RULE: 04d owns the record shape; 04g/04h/04f
+   reference it. Fold the union into the 04d revision.
+4. LOW: `no_victim_accounted_progress_preserved` statement is garbled;
+   `ToyState`'s `n` in the livelock lemma is unbound.
+
+## 04i — Theorem 1 (APPROVE-WITH-FIXES)
+
+**The guard rail held**: no horizon, closedness, external-source, or
+arbitrary-utility assumptions anywhere; the load is carried by
+`ownConversion`/`DependencyReturn`; strictness posture correct ("don't
+weaken to ≥ without a FINDINGS entry"). One deliberate property to make
+explicit: the single-step policy scope (`act : CoreState → Action`,
+applied once) avoids the horizon question BY CONSTRUCTION — state that
+in the task so nobody "generalizes" to multi-step value and reopens it.
+
+1. MEDIUM: DebtLedger is a standalone structure — state explicitly
+   whether it wires into CoreState transfers or stands as a mini-model
+   with a documented bridge.
+2. LOW: `selfish_optima_eq_generous_optima` at full policy level may
+   resist; the staged fallback (finite action-set version) is already
+   in the task — good; commit to recording which level was proved.
+
+## 04j — PaperClaims closure (APPROVE-WITH-FIXES)
+
+1. **HIGH, stale premise:** `PaperClaims.lean` and EVIDENCE-AUDIT.md
+   already exist in the tree (18 proved aliases; audit PASS), so the
+   task's "Add:" framing makes acceptance 1–2 unfalsifiable — the gate
+   is hollow as written. Rewrite as "extend/reconcile the existing
+   module and regenerate the audit," and COMMIT the referenced
+   `tools/lean-evidence-audit` script, which is cited but absent.
+2. MEDIUM: headline-name drift vs sibling tasks (`detection_sound` /
+   `detector_sound`; `resolution_yield_loses_no_work` /
+   `..._no_accounted_work`; `priority_inversion_cannot_form` /
+   `canonical_...`; `collapse_whole_invariant` /
+   `flexibility_...`). Include an explicit source→alias map.
+3. MEDIUM: define "`#print axioms` is clean" = exactly the standard
+   triple `[propext, Classical.choice, Quot.sound]` and nothing else;
+   as written it is unfalsifiable.
+4. LOW: annotate `L2_monotonicity` "repaired/restricted reading only"
+   (the unrestricted L2 is the series' known-false claim); fix the
+   ineffective `grep -Rnw ... "axiom "` scan and align scope with 04d's.
+
+## Cross-cutting rulings
+
+- **04d owns the CoreProc/CoreState record shape and the shared
+  vocabulary**; 04f/04g/04h reference it and may not redefine. Fold
+  04g's budget fields and 04h's restart fields into the 04d revision as
+  the union record.
+- **Name ownership**: `closed_wait_set_exec_absorbing` → 04d;
+  detection-soundness naming resolved in the 04j alias map.
+- **Gate procedure**: per REVIEW-QUEUE — commit each task-file fix
+  before its implementation begins. 04d's edits first; nothing else
+  starts until the 04d revision is committed.
+
+Scoreboard for the skeptics (and for Fabian's fair question "won't
+Lean catch these?"): of today's findings, the five false-as-written
+theorems would each have hit the prover eventually — but three of them
+(04d.1, 04f.1, 04g.1) have at least one WRONG repair that compiles
+green, and the two definition-pin findings (04d.2, 04f.3) would never
+hit the prover at all: Lean proves theorems about whatever the
+definitions say. That division is this gate's entire job description.
+
+— Fable, 2026-07-19
