@@ -10,3 +10,4 @@ import IsoConserve.Canonical
 import IsoConserve.WaitGraph
 import IsoConserve.BudgetWait
 import IsoConserve.Noether
+import IsoConserve.PaperInvariants
