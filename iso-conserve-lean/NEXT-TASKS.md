@@ -284,20 +284,11 @@ member's starting budget floors the closed component.
    members are blocked and non-converting at every bridge step, so each member's
    budget evolves as truncated subtraction. Therefore a persistent closed
    component is detected within its budget bound, with no wall-clock timeout.
-2. **4.4 corollaries: the three invariants as named theorems.** The
-   combined paper's load-bearing claim is that epistemic/alignment/agency
-   are *corollaries of L1*, and the Lean names should say so:
-   - `epistemic_invariant` — wrap `accounted_eq_totalQ` + `wf_reachable`:
-     every reachable state's ledger equals the declared total.
-   - `alignment_invariant` — a transfer lemma: for any step in
-     `MixedRel`, one account's decrease is exactly matched by
-     reserve+others+converted increase (rearranged L1; state it
-     per-process).
-   - `agency_invariant` — no step increases `accounted`-external value:
-     ∀ steps, Δstock_i > 0 → reserve or another account paid for it
-     (again L1 rearranged, but the *named statement* is what the paper
-     cites).
-   Mostly packaging; ~80 lines total, huge paper value per line.
+2. **Completed: 4.4 corollaries, the three invariants as named theorems.**
+   `IsoConserve.PaperInvariants` now exports `epistemic_invariant`,
+   `alignment_invariant`, and `agency_invariant`. These are citation-facing L1
+   corollaries over `MixedRel`: reachable ledger equality, local/outside transfer
+   balance, and local gain paid for by outside-account decrease.
 3. **4.7 middle way: the collapse conservation identity.** Tiny module
    (`Flexibility.lean`): a decision state `(potential : Qty, actual :
    Qty)` with a `collapse` step moving q from potential to actual;

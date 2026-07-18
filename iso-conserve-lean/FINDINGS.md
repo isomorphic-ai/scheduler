@@ -192,3 +192,13 @@
    completeness certificate directly as an `evidencedDeadlock`, using closed-set
    absorption for blocked history and no-conversion. This is logical-attempt
    latency, not elapsed time.
+
+22. The paper's epistemic/alignment/agency invariants are now named L1 corollaries.
+
+   `IsoConserve.PaperInvariants` adds the citation-facing wrappers:
+   `epistemic_invariant` states that every mixed-reachable state from an initial WF
+   state has ledger `accounted = initial totalQ`; `alignment_invariant` states that
+   any local account decrease is exactly balanced by the outside account increase;
+   and `agency_invariant` states that a local account increase implies the outside
+   account strictly decreased. These are conservation corollaries, not yet the full
+   dependency-utility theorem about hoarding.

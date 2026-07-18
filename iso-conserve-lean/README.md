@@ -131,6 +131,18 @@ the caching series' "loss is invalidation" theorem.
 half: a trust-on-absence predicate strictly grows after a one-step loss in a
 one-key, one-proof cache. Together these are the mechanized shape of Claim 1.
 
+## Paper Invariants
+
+`IsoConserve.PaperInvariants` packages three combined-paper corollaries of L1
+under the names the paper can cite:
+
+- `epistemic_invariant`: from initial WF and mixed reachability, every reachable
+  state's ledger equals the initial declared `totalQ`.
+- `alignment_invariant`: for any mixed step, a local account's decrease is exactly
+  the matching increase in the outside account.
+- `agency_invariant`: if a local account increases in a mixed step, the outside
+  account strictly decreases; private gain is paid for inside the conserved ledger.
+
 ## Noether Slice
 
 `IsoConserve.Noether` contains the first formal slice of the discrete Noether
