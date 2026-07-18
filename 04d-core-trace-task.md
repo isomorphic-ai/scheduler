@@ -2,7 +2,8 @@
 
 **Series:** Isomorphic Scheduler · combined paper / Paper 04 companion
 **Depends on:** `iso-conserve-lean`, `DELTA-AUDIT.md`, `paper08-expanded.md`,
-`GPT-5.6-pro-feedback--lean.md`, and Review #6 in `REVIEW-by-fable.md`
+`GPT-5.6-pro-feedback--lean.md`, Review #6, and Review #7 in
+`REVIEW-by-fable.md`
 **Goal:** build the next core beside the existing modules: one state that is both a
 conserved ledger and a dependency graph, with explicit trace/event semantics and a
 trace-derived stock/flow integral. Existing proofs are substrate; this task lifts
@@ -34,6 +35,11 @@ new name.
 
 Do **not** code WP3/WP4/WP5/WP6 against the old split state. Those task files depend
 on this task's state and event vocabulary.
+
+This task owns the shared `CoreProc`/`CoreState` record shape. Later WP files
+(`04f`, `04g`, `04h`) must import this shape and add derived observables or thin
+aliases, not redefine a sibling core state. In particular, fold the rate-routing
+base rate, detector budget, and resolution restart fields into this revision.
 
 ---
 
@@ -93,9 +99,13 @@ structure CoreProc (m : Nat) where
   baseRate : Qty
   stock : Qty
   credit : Qty
-  converted : Nat
+  convertedTotal : Nat
+  convertedSinceRestart : Nat
   workNeeded : Nat
+  pc : Nat
   wants : Option (LockId m)
+  budget : Nat
+  budgetCap : Nat
   done : Bool
 
 structure CoreState (n m : Nat) where
@@ -118,7 +128,25 @@ runnable
 unfinished
 closedDependencySet
 strandedClaim
+allDone
+atTableEmpty
+Deadlocked
 ```
+
+`convertedTotal` is cumulative delivered work. `convertedSinceRestart` is the
+restart-local part that resolution yield may bank into `credit`; do not let one
+field mean both. The detector budget is a Nat view in the shared core, exposed by
+`budget`/`budgetCap` aliases for WP3.
+
+`Deadlocked` must be a **global** predicate, not a per-component predicate:
+
+```lean
+def Deadlocked (s : CoreState n m) : Prop :=
+  atTableEmpty s /\ not (allDone s)
+```
+
+The intended meaning of `atTableEmpty` is that ordinary execution has no
+state-changing move available. Cure moves are deliberately excluded.
 
 The important semantic choice from the Pro feedback: `DependencyConnected` or
 `DependsOnWhole` must express dependency return, not ordinary undirected graph
@@ -138,6 +166,11 @@ structure CoreWF (s : CoreState n m) : Prop where
   stock_nonneg : forall p, 0 <= (s.procs p).stock
   credit_nonneg : forall p, 0 <= (s.procs p).credit
   rate_nonneg : forall p, 0 <= (s.procs p).baseRate
+  budget_le_cap : forall p, (s.procs p).budget <= (s.procs p).budgetCap
+  since_le_total :
+    forall p, (s.procs p).convertedSinceRestart <= (s.procs p).convertedTotal
+  done_holds_nothing :
+    forall p l, (s.procs p).done = true -> s.holds p l = false
   accounted_eq_total : accounted s = s.totalQ
 
 structure WFState (n m : Nat) where
@@ -148,6 +181,9 @@ structure WFState (n m : Nat) where
 Transitions may either return `WFState n m` directly, or return a state together
 with a preservation theorem that immediately constructs `WFState`. The public step
 relation should quantify over well-formed states, not arbitrary raw states.
+Preservation must carry every WF field above, especially `done_holds_nothing`;
+without it, a normally released lock held by a done process can falsify the
+deadlock absorption theorem.
 
 ---
 
@@ -241,14 +277,22 @@ Retain the corrected readings:
 theorem no_progress_convertible_stock_monotone :
   RTC NoProgressRel s t -> convertibleStock t.state <= convertibleStock s.state
 
+def BlockedPreservingRel (p : ProcId n) (s t : WFState n m) : Prop :=
+  CoreRel s t /\ blocked s.state p /\ blocked t.state p
+
 theorem blocked_stock_monotone :
-  blocked s.state p -> RTC CoreRel s t ->
+  RTC (BlockedPreservingRel p) s t ->
     (t.state.procs p).stock <= (s.state.procs p).stock
 
 theorem flow_leaves_blocked_stock_unchanged :
   blocked s.state p -> ExecFlowRel s t ->
     (t.state.procs p).stock = (s.state.procs p).stock
 ```
+
+If a path-indexed trace predicate is more ergonomic during implementation, expose a
+`blockedThroughout` wrapper and derive the required theorem above from it. Do not
+repair this theorem by freezing `runnable` or by proving a vacuous no-op relation:
+blockedness can change in the unified core when locks are released.
 
 Also restate the old false reading as a checked counterexample in the new semantics:
 
@@ -282,6 +326,14 @@ theorem cure_can_break_absorption :
 
 The last theorem may be a concrete witness. It is important because it prevents the
 wrong reading "deadlock can never be intentionally resolved."
+
+`deadlock_exec_fixed` is only the paper's L3 when `Deadlocked` is the global
+`atTableEmpty /\ not allDone` predicate and all states in the relation satisfy
+`CoreWF.done_holds_nothing`. A per-component theorem may be useful, but it must not
+be exported under this name.
+
+`closed_wait_set_exec_absorbing` is owned by this module. Downstream detector work
+must import or alias it rather than re-proving the same name against a drifted state.
 
 ### C4 — L4 as trace-derived integral
 
@@ -349,7 +401,7 @@ Update `FINDINGS.md` if the prover forces a spec correction, especially around:
 ## 9. Acceptance Criteria
 
 1. `lake build` succeeds.
-2. `rg -n "sorry|admit|axiom" IsoConserve IsoConserve.lean lakefile.lean`
+2. `rg -n "\\b(sorry|admit|axiom)\\b" IsoConserve IsoConserve.lean lakefile.lean`
    returns no matches.
 3. New module is imported by `IsoConserve.lean`.
 4. Public relation names include `ExecRel`, `CureRel`, and `CoreRel`.
