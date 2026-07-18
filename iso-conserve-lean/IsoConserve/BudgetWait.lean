@@ -144,6 +144,14 @@ theorem bw_wf_step {n m : Nat} {s : BWState n m}
       · simp [hc, hb]
         exact hwf.budget_le_cap p
 
+theorem bw_wf_stepN {n m : Nat} {s : BWState n m}
+    (k : Nat) (hwf : BWWF s) : BWWF (stepN k s) := by
+  induction k generalizing s with
+  | zero =>
+      exact hwf
+  | succ k ih =>
+      exact ih (s := step s) (bw_wf_step hwf)
+
 theorem budget_drop_implies_blocked {n m : Nat} {s : BWState n m}
     {p : Pid n} (hwf : BWWF s)
     (hdrop : ((step s).procs p).budget < (s.procs p).budget) :
@@ -199,7 +207,7 @@ def blockedThroughout {n m : Nat}
     (s : BWState n m) (k : Nat) (p : Pid n) : Prop :=
   forall j, j < k -> blocked (stepN j s) p
 
-theorem floor_after_budget_window_implies_blockedThroughout_aux {n m : Nat}
+theorem floor_after_exact_budget_window_implies_blockedThroughout_with_path {n m : Nat}
     {s : BWState n m} (p : Pid n) :
     forall k,
       (s.procs p).budget = k ->
@@ -256,15 +264,25 @@ theorem floor_after_budget_window_implies_blockedThroughout_aux {n m : Nat}
           have hj_tail : j < k := by omega
           exact htail_blocked j hj_tail
 
+theorem floor_after_exact_budget_window_implies_blockedThroughout {n m : Nat}
+    {s : BWState n m} {p : Pid n} {k : Nat}
+    (hbudget : (s.procs p).budget = k)
+    (hfloor : ((stepN k s).procs p).budget = 0)
+    (hwf : BWWF s) :
+    blockedThroughout s k p := by
+  exact floor_after_exact_budget_window_implies_blockedThroughout_with_path
+    (s := s) p k hbudget hfloor (by
+      intro j _hj
+      exact bw_wf_stepN j hwf)
+
 theorem floor_after_full_drain_window_implies_blockedThroughout {n m : Nat}
     {s : BWState n m} {p : Pid n}
     (hcap : (s.procs p).budget = (s.procs p).budgetCap)
-    (_hpos : 0 < (s.procs p).budgetCap)
     (hfloor : ((stepN (s.procs p).budgetCap s).procs p).budget = 0)
-    (hwf_path : forall j, j <= (s.procs p).budgetCap -> BWWF (stepN j s)) :
+    (hwf : BWWF s) :
     blockedThroughout s (s.procs p).budgetCap p := by
-  exact floor_after_budget_window_implies_blockedThroughout_aux
-    (s := s) p (s.procs p).budgetCap hcap hfloor hwf_path
+  exact floor_after_exact_budget_window_implies_blockedThroughout
+    (s := s) (p := p) hcap hfloor hwf
 
 theorem closedWaitSet_not_runnable {n m : Nat} {s : BWState n m}
     {C : Pid n -> Bool} (hC : closedWaitSet s C)
@@ -392,12 +410,9 @@ structure evidencedDeadlock {n m : Nat} (s0 : BWState n m) (k : Nat)
 theorem detection_sound_with_budget_evidence {n m : Nat}
     {s0 : BWState n m} {C : Pid n -> Bool} {k : Nat}
     (hC0 : closedWaitSet s0 C)
-    (hfull : forall p, C p = true ->
-      (s0.procs p).budget = (s0.procs p).budgetCap)
-    (hpos : forall p, C p = true -> 0 < (s0.procs p).budgetCap)
-    (hsameCap : forall p, C p = true -> (s0.procs p).budgetCap = k)
+    (hstart : forall p, C p = true -> (s0.procs p).budget = k)
     (hfloor : floored (stepN k s0) C)
-    (hwf_path : forall j, j <= k -> BWWF (stepN j s0))
+    (hwf : BWWF s0)
     (nonempty : exists p, C p = true) :
     evidencedDeadlock s0 k C := by
   constructor
@@ -405,23 +420,10 @@ theorem detection_sound_with_budget_evidence {n m : Nat}
   · exact closedWaitSet_iter k hC0
   · exact hfloor
   · intro p hp
-    have hcap_eq : (s0.procs p).budgetCap = k := hsameCap p hp
-    have hbudget : (s0.procs p).budget = k := by
-      rw [hfull p hp, hcap_eq]
+    have hbudget : (s0.procs p).budget = k := hstart p hp
     have hfloor_p : ((stepN k s0).procs p).budget = 0 := hfloor p hp
-    have hblocked_k :
-        blockedThroughout s0 (s0.procs p).budgetCap p :=
-      floor_after_full_drain_window_implies_blockedThroughout
-        (s := s0) (p := p) (hfull p hp) (hpos p hp) (by
-          rw [hcap_eq]
-          exact hfloor_p)
-        (by
-          intro j hj
-          exact hwf_path j (by
-            rw [hcap_eq] at hj
-            exact hj))
-    rw [hcap_eq] at hblocked_k
-    exact hblocked_k
+    exact floor_after_exact_budget_window_implies_blockedThroughout
+      (s := s0) (p := p) hbudget hfloor_p hwf
   · exact totalConvertedIn_iter k hC0
 
 end
