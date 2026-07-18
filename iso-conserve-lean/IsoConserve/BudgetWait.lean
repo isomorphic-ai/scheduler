@@ -98,6 +98,15 @@ def stepN {n m : Nat} : Nat -> BWState n m -> BWState n m
   | 0, s => s
   | k + 1, s => stepN k (step s)
 
+theorem stepN_add {n m : Nat} (a b : Nat) (s : BWState n m) :
+    stepN (a + b) s = stepN b (stepN a s) := by
+  induction a generalizing s with
+  | zero =>
+      simp [stepN]
+  | succ a ih =>
+      simpa [stepN, Nat.succ_eq_add_one, Nat.add_assoc, Nat.add_comm,
+        Nat.add_left_comm] using ih (s := step s)
+
 theorem canConvert_false_of_blocked {n m : Nat} {s : BWState n m}
     {p : Pid n} (hb : blocked s p) :
     ¬ canConvert s p := by
@@ -207,6 +216,14 @@ def blockedThroughout {n m : Nat}
     (s : BWState n m) (k : Nat) (p : Pid n) : Prop :=
   forall j, j < k -> blocked (stepN j s) p
 
+def budgetWindowEvidence {n m : Nat}
+    (s0 : BWState n m) (p : Pid n) (observedAt : Nat) : Prop :=
+  exists start window,
+    start + window = observedAt /\
+    ((stepN start s0).procs p).budget = window /\
+    ((stepN observedAt s0).procs p).budget = 0 /\
+    forall j, j < window -> blocked (stepN (start + j) s0) p
+
 theorem floor_after_exact_budget_window_implies_blockedThroughout_with_path {n m : Nat}
     {s : BWState n m} (p : Pid n) :
     forall k,
@@ -283,6 +300,44 @@ theorem floor_after_full_drain_window_implies_blockedThroughout {n m : Nat}
     blockedThroughout s (s.procs p).budgetCap p := by
   exact floor_after_exact_budget_window_implies_blockedThroughout
     (s := s) (p := p) hcap hfloor hwf
+
+theorem observed_floor_after_budget_window_implies_evidence {n m : Nat}
+    {s0 : BWState n m} {p : Pid n} {start k : Nat}
+    (hbudget : ((stepN start s0).procs p).budget = k)
+    (hfloor : ((stepN (start + k) s0).procs p).budget = 0)
+    (hwf : BWWF s0) :
+    budgetWindowEvidence s0 p (start + k) := by
+  have hfloor_window :
+      ((stepN k (stepN start s0)).procs p).budget = 0 := by
+    rw [← stepN_add start k s0]
+    exact hfloor
+  have hblocked :
+      blockedThroughout (stepN start s0) k p :=
+    floor_after_exact_budget_window_implies_blockedThroughout
+      (s := stepN start s0) (p := p) hbudget hfloor_window
+      (bw_wf_stepN start hwf)
+  refine ⟨start, k, rfl, hbudget, hfloor, ?_⟩
+  intro j hj
+  rw [stepN_add start j s0]
+  exact hblocked j hj
+
+theorem observed_floor_after_window_start_implies_evidence {n m : Nat}
+    {s0 : BWState n m} {p : Pid n} {start observedAt : Nat}
+    (hle : start <= observedAt)
+    (hbudget : ((stepN start s0).procs p).budget = observedAt - start)
+    (hfloor : ((stepN observedAt s0).procs p).budget = 0)
+    (hwf : BWWF s0) :
+    budgetWindowEvidence s0 p observedAt := by
+  have hend : start + (observedAt - start) = observedAt := by
+    omega
+  have hfloor_window :
+      ((stepN (start + (observedAt - start)) s0).procs p).budget = 0 := by
+    rw [hend]
+    exact hfloor
+  simpa [hend] using
+    observed_floor_after_budget_window_implies_evidence
+      (s0 := s0) (p := p) (start := start) (k := observedAt - start)
+      hbudget hfloor_window hwf
 
 theorem closedWaitSet_not_runnable {n m : Nat} {s : BWState n m}
     {C : Pid n -> Bool} (hC : closedWaitSet s C)

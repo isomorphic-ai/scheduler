@@ -90,7 +90,10 @@ allocation.
   budget decrease can only come from computed blocking.
   `IsoConserve.BudgetWait.floor_after_exact_budget_window_implies_blockedThroughout`
   proves that draining from any starting budget `k` to zero over exactly `k`
-  steps implies the process was blocked throughout. The paper-facing theorem
+  steps implies the process was blocked throughout.
+  `IsoConserve.BudgetWait.observed_floor_after_window_start_implies_evidence`
+  turns an observed floor time plus a supplied window start into an existential
+  `budgetWindowEvidence` certificate. The paper-facing theorem
   `IsoConserve.BudgetWait.detection_sound_with_budget_evidence` combines this
   budget history with closed-component absorption.
 
@@ -221,6 +224,14 @@ witness interval with budget `k` and reaches zero after exactly `k` steps, then 
 was blocked at every step in that interval. This is the theorem that makes the
 floor evidence load-bearing. The full-cap version
 `floor_after_full_drain_window_implies_blockedThroughout` is a corollary.
+
+`budgetWindowEvidence` is the detector-facing existential package: it records the
+window start, window length, ending observation time, starting budget, observed
+floor, and blocked history. `observed_floor_after_window_start_implies_evidence`
+proves this package from an observed floor at time `observedAt` plus a supplied
+candidate window start whose budget equals `observedAt - start`. This is not a
+floor-alone theorem; automatic discovery of the most recent refill point would
+require trace/log state outside this bridge model.
 
 `detection_sound_with_budget_evidence` packages the end-to-end certificate for a
 supplied closed component whose members share a starting budget/window `k`: the
