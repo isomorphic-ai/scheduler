@@ -26,6 +26,18 @@ unified core state/event vocabulary has landed. This task lifts the existing
 `BudgetWait` bridge into the core; it should not become a third parallel detector
 state.
 
+Implement the Lean surface in:
+
+```lean
+namespace IsoConserve.DetectorProgress
+```
+
+Names already exported by `IsoConserve.CoreTrace`, `IsoConserve.BudgetWait`, or
+`IsoConserve.PaperClaims` must be imported or aliased rather than redefined under
+the same unqualified name. In particular, `closed_wait_set_exec_absorbing` is
+owned by 04d/CoreTrace; this task may export a detector-facing alias, but it must
+not re-prove or fork the theorem.
+
 Do **not** use wall-clock time, elapsed time, sleeps, timestamps, or timeout
 constants. Bounds are in scheduled attempts, conversion opportunities, or per-member
 selection counts.
@@ -81,13 +93,7 @@ slow-but-live safety, deadlock liveness, and an exact budget bound.
 
 ## 2. Inputs From The Unified Core
 
-This task needs the core state to expose, or be extended to expose, one detector
-budget per process.
-
-If `04d` keeps `stock : Qty` as the detector budget, define the floor/bound in Q
-units and prove the discrete bound under a fixed decrement quantum.
-
-If that becomes awkward, revise the core before implementation to carry the
+The unified 04d core owns the process record shape. It already carries the
 detector view explicitly:
 
 ```lean
@@ -111,17 +117,19 @@ budget      : CoreState n m -> ProcId n -> Nat
 budgetCap   : CoreState n m -> ProcId n -> Nat
 ```
 
-If `budget` is represented by `stock`, use aliases with theorem names that still
-read as detector claims.
+Do not represent the detector budget by `stock` in this task; `stock` remains the
+Q ledger quantity, while `budget : Nat` is the detector counter.
 
 ---
 
 ## 3. Detector Step Semantics
 
-Define a scheduled attempt as a core event or transition:
+Define a scheduled attempt as a core transition, and use schedules as the only
+execution driver for this module:
 
 ```lean
 def observeAttempt (s : CoreState n m) (p : ProcId n) : CoreState n m := ...
+def runSchedule : List (ProcId n) -> CoreState n m -> CoreState n m := ...
 ```
 
 Required behavior:
@@ -133,6 +141,11 @@ Required behavior:
 3. Else the process neither converts nor drains.
 4. Lock acquisition/release and `done` updates come from the unified core, not from
    a detector-only copy.
+
+Do not introduce a second synchronous `stepN` semantics for the headline theorems.
+If iteration helpers are useful, define them as wrappers around schedule prefixes
+so every budget-window statement talks about selected attempts for the process in
+question.
 
 Required one-step facts:
 
@@ -184,18 +197,18 @@ closure evidence is checked against the current state.
 
 ## 5. Slow-But-Live Safety
 
-State liveness of an individual process in conversion units, not time:
+State liveness of an individual process in conversion units and selected attempts,
+not time. The budget can be nonzero forever only if the observation starts from a
+full enough budget; Review #7 found that the old statement was false at `j = 0`
+when `budget s p = 0`.
 
 ```lean
-def convertsWithinEveryWindow
-    (trace : List StepEvent) (p : ProcId n) (k : Nat) : Prop := ...
-```
+def selectedCount
+    (schedule : List (ProcId n)) (p : ProcId n) : Nat := ...
 
-or, for the deterministic core step iterator:
-
-```lean
-def convertsAtLeastEvery
-    (s0 : CoreState n m) (p : ProcId n) (k horizon : Nat) : Prop := ...
+def convertsWithinEverySelectionWindow
+    (s0 : CoreState n m) (schedule : List (ProcId n))
+    (p : ProcId n) (window : Nat) : Prop := ...
 ```
 
 Required theorems:
@@ -203,14 +216,20 @@ Required theorems:
 ```lean
 theorem periodic_conversion_never_floors
     (hcap_pos : 0 < budgetCap s p)
-    (hlive : convertsAtLeastEvery s p (budgetCap s p) horizon) :
-    forall j, j <= horizon -> budget (stepN j s) p != 0
+    (hbudget0 : budget s p = budgetCap s p)
+    (hlive : convertsWithinEverySelectionWindow s schedule p (budgetCap s p)) :
+    forall prefix,
+      prefix <:+ schedule ->
+      budget (runSchedule prefix s) p != 0
 
 theorem live_process_not_detected
     (hcap_pos : 0 < budgetCap s p)
-    (hlive : convertsAtLeastEvery s p (budgetCap s p) horizon)
+    (hbudget0 : budget s p = budgetCap s p)
+    (hlive : convertsWithinEverySelectionWindow s schedule p (budgetCap s p))
     (hp : C p = true) :
-    forall j, j <= horizon -> not (detectorFires (stepN j s) C)
+    forall prefix,
+      prefix <:+ schedule ->
+      not (detectorFires (runSchedule prefix s) C)
 ```
 
 If `live_process_not_detected` needs the stronger assumption that `p` is the
@@ -224,16 +243,16 @@ the theorem into a wall-clock statement.
 Closed components should remain closed and non-converting under ordinary execution:
 
 ```lean
-theorem closed_wait_set_exec_absorbing
-theorem closed_wait_set_no_conversion
+theorem closed_wait_set_exec_absorbing :=
+  CoreTrace.closed_wait_set_exec_absorbing
+
+theorem closed_wait_set_no_conversion :=
+  CoreTrace.closed_wait_set_converted_total_fixed
 ```
 
 Then prove bounded detection under fair scheduling. Use selection counts, not time:
 
 ```lean
-def selectedCount
-    (schedule : List (ProcId n)) (p : ProcId n) : Nat := ...
-
 def memberSelectedAtLeast
     (schedule : List (ProcId n)) (C : ProcId n -> Bool) (k : Nat) : Prop :=
   forall p, C p = true -> k <= selectedCount schedule p
@@ -256,7 +275,14 @@ theorem deadlock_eventually_detected
     detectorFires (runSchedule schedule s) C
 
 theorem detection_latency_le_budget
-    ...
+    (hC : closedWaitSet s C)
+    (hnonempty : exists p, C p = true)
+    (hfair : memberSelectedAtLeast schedule C k)
+    (hcap : forall p, C p = true -> budget s p <= k) :
+    exists prefix,
+      prefix <:+ schedule /\
+      detectorFires (runSchedule prefix s) C /\
+      forall p, C p = true -> selectedCount prefix p <= k
 ```
 
 For a round-robin schedule, add a corollary translating the bound to rounds if it
@@ -324,8 +350,9 @@ Document boundaries:
   graph search;
 - no wall-clock time;
 - honest channel, not Byzantine enforcement;
-- if the detector budget is a Nat view of Q-stock, state the conversion between
-  the two.
+- the floor conjunct in `detector_sound` is carried as detector evidence, but
+  closure is the load-bearing structural proof of genuine deadlock; budget-window
+  theorems are what make the floor evidence meaningful over a trace.
 
 Update `FINDINGS.md` if Lean forces a sharper claim. Likely candidates:
 
@@ -346,6 +373,8 @@ Update `FINDINGS.md` if Lean forces a sharper claim. Likely candidates:
 5. README and FINDINGS cite exact theorem names and boundaries.
 6. A no-time audit on the new Lean module finds no clock/timeout vocabulary except
    comments explaining the exclusion.
+7. The Review #7 repair commit for this task file precedes the implementation
+   commit.
 
 ---
 
