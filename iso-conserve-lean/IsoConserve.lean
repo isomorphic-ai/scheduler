@@ -9,3 +9,4 @@ import IsoConserve.Polarity
 import IsoConserve.Canonical
 import IsoConserve.WaitGraph
 import IsoConserve.BudgetWait
+import IsoConserve.Noether

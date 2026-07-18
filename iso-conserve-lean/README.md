@@ -128,6 +128,20 @@ the caching series' "loss is invalidation" theorem.
 half: a trust-on-absence predicate strictly grows after a one-step loss in a
 one-key, one-proof cache. Together these are the mechanized shape of Claim 1.
 
+## Noether Slice
+
+`IsoConserve.Noether` contains the first formal slice of the discrete Noether
+experiment. It defines `StutterRel`, `ConservedBy`, and `ClockFreeInvariant`, then
+proves `clockFreeInvariant_iff_conservedBy`: a quantity is invariant over all
+finite stutter/relabeling paths exactly when it is conserved by each real step.
+
+`IsoConserve.Noether.mixedRel_accounted_clockFree` instantiates this theorem for
+the scheduler's mixed flow/drain/yield relation and the charge
+`fun s => accounted s`. `mixedRel_accounted_eq_totalQ_under_clockFree` connects
+that charge back to `totalQ` for a well-formed starting state. This does not prove
+uniqueness of Q; it proves the clock-free conservation equivalence and the Q
+instance.
+
 ## Canonical Python-Plan Instance
 
 `IsoConserve.Canonical` defines `Init`, `pythonQuantum`, `forcedConvert`,

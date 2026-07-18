@@ -160,3 +160,14 @@
    this from a supplied candidate window start and an observed floor. The theorem
    deliberately does not infer the most recent refill point from floor data alone;
    that would require trace/log state outside `BudgetWait`.
+
+19. The Noether experiment has a formal first slice, but not uniqueness.
+
+   `IsoConserve.Noether.clockFreeInvariant_iff_conservedBy` proves the discrete
+   stutter/relabeling equivalence: a charge is invariant over every finite
+   stuttering path exactly when every real step conserves it. The scheduler
+   instance `mixedRel_accounted_clockFree` shows that `accounted` is such a charge
+   for mixed flow/drain/yield behavior, and
+   `mixedRel_accounted_eq_totalQ_under_clockFree` ties it to the initial `totalQ`
+   under WF. This is the clock-free conservation kernel; it does not yet prove
+   that Q is the unique or forced charge.
