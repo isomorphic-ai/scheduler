@@ -38,6 +38,19 @@ theorem conservedBy_stutter {State : Sort u} {Charge : Type v}
   | inr hstep =>
       exact h hstep
 
+theorem conservedBy_comp {State : Sort u} {Charge : Type v} {Other : Type w}
+    {R : State -> State -> Prop} {charge : State -> Charge}
+    (h : ConservedBy R charge) (f : Charge -> Other) :
+    ConservedBy R (fun s => f (charge s)) := by
+  intro s t step
+  exact congrArg f (h step)
+
+theorem constant_conservedBy {State : Sort u} {Charge : Type v}
+    (R : State -> State -> Prop) (c : Charge) :
+    ConservedBy R (fun _ : State => c) := by
+  intro _s _t _step
+  rfl
+
 theorem clockFreeInvariant_iff_conservedBy {State : Sort u} {Charge : Type v}
     (R : State -> State -> Prop) (charge : State -> Charge) :
     ClockFreeInvariant R charge <-> ConservedBy R charge := by
@@ -52,6 +65,26 @@ theorem clockFreeInvariant_iff_conservedBy {State : Sort u} {Charge : Type v}
         (charge := charge)
         (conservedBy_stutter (R := R) (charge := charge) h)
         reach
+
+theorem clockFreeInvariant_comp {State : Sort u} {Charge : Type v}
+    {Other : Type w} {R : State -> State -> Prop} {charge : State -> Charge}
+    (h : ClockFreeInvariant R charge) (f : Charge -> Other) :
+    ClockFreeInvariant R (fun s => f (charge s)) := by
+  have hc : ConservedBy R charge :=
+    (clockFreeInvariant_iff_conservedBy R charge).1 h
+  have hcomp : ConservedBy R (fun s => f (charge s)) :=
+    conservedBy_comp (R := R) (charge := charge) hc f
+  intro s t reach
+  exact
+    ((clockFreeInvariant_iff_conservedBy R (fun s => f (charge s))).2
+      hcomp) reach
+
+theorem constant_clockFreeInvariant {State : Sort u} {Charge : Type v}
+    (R : State -> State -> Prop) (c : Charge) :
+    ClockFreeInvariant R (fun _ : State => c) := by
+  exact
+    (clockFreeInvariant_iff_conservedBy R (fun _ : State => c)).2
+      (constant_conservedBy R c)
 
 theorem mixedRel_accounted_conserved {n : Nat} :
     ConservedBy (@MixedRel n) (fun s : Sys n => accounted s) := by
@@ -86,6 +119,15 @@ theorem mixedRel_accounted_eq_totalQ_under_clockFree {n : Nat}
   calc
     accounted t = accounted s := mixedRel_accounted_clockFree reach
     _ = s.totalQ := hwf.accounted_eq_total
+
+theorem mixedRel_accounted_postcompose_clockFree {n : Nat} {Other : Type v}
+    (f : Qty -> Other) :
+    ClockFreeInvariant (@MixedRel n) (fun s : Sys n => f (accounted s)) := by
+  exact clockFreeInvariant_comp mixedRel_accounted_clockFree f
+
+theorem mixedRel_constant_clockFree {n : Nat} {Charge : Type v} (c : Charge) :
+    ClockFreeInvariant (@MixedRel n) (fun _ : Sys n => c) := by
+  exact constant_clockFreeInvariant (@MixedRel n) c
 
 end Noether
 end IsoConserve

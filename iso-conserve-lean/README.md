@@ -138,9 +138,14 @@ finite stutter/relabeling paths exactly when it is conserved by each real step.
 `IsoConserve.Noether.mixedRel_accounted_clockFree` instantiates this theorem for
 the scheduler's mixed flow/drain/yield relation and the charge
 `fun s => accounted s`. `mixedRel_accounted_eq_totalQ_under_clockFree` connects
-that charge back to `totalQ` for a well-formed starting state. This does not prove
-uniqueness of Q; it proves the clock-free conservation equivalence and the Q
-instance.
+that charge back to `totalQ` for a well-formed starting state.
+
+The module also records the uniqueness obstruction:
+`clockFreeInvariant_comp`, `constant_clockFreeInvariant`,
+`mixedRel_accounted_postcompose_clockFree`, and `mixedRel_constant_clockFree`
+show that postcompositions of a conserved charge and constant charges are
+clock-free too. Bare stutter invariance therefore cannot prove Q unique; a future
+uniqueness theorem would need extra normalization or observability assumptions.
 
 ## Canonical Python-Plan Instance
 

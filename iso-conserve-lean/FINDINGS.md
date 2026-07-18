@@ -171,3 +171,13 @@
    `mixedRel_accounted_eq_totalQ_under_clockFree` ties it to the initial `totalQ`
    under WF. This is the clock-free conservation kernel; it does not yet prove
    that Q is the unique or forced charge.
+
+20. Bare clock-free invariance cannot force a unique charge.
+
+   `clockFreeInvariant_comp` proves that any postcomposition of a clock-free charge
+   is clock-free, and `constant_clockFreeInvariant` proves that constant charges
+   are clock-free for any relation. The scheduler instances
+   `mixedRel_accounted_postcompose_clockFree` and `mixedRel_constant_clockFree`
+   make the obstruction concrete for `MixedRel`. Therefore the strong "Q is the
+   unique forced charge" reading is false without additional normalization or
+   observability assumptions.
