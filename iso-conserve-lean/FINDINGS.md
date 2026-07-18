@@ -150,3 +150,13 @@
    path invariant that follows from `bw_wf_step`. The theorem `bw_wf_stepN` now
    derives `BWWF (stepN k s)` from `BWWF s`, and the public exact-window and
    detector-certificate theorems take initial `BWWF` only.
+
+18. Observed floors now produce explicit witness-window evidence, not floor-alone
+    conclusions.
+
+   `budgetWindowEvidence` packages the existential detector read: a start time,
+   window length, observed end time, matching starting budget, final floor, and
+   blocked history. `observed_floor_after_window_start_implies_evidence` proves
+   this from a supplied candidate window start and an observed floor. The theorem
+   deliberately does not infer the most recent refill point from floor data alone;
+   that would require trace/log state outside `BudgetWait`.
