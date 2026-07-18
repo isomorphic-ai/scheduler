@@ -74,6 +74,18 @@ headline_theorems=(
   IsoConserve.alignment_invariant
   IsoConserve.agency_invariant
   IsoConserve.Flexibility.collapse_whole_invariant
+  IsoConserve.PaperClaims.L1_conservation
+  IsoConserve.PaperClaims.L2_monotonicity
+  IsoConserve.PaperClaims.L3_absorption
+  IsoConserve.PaperClaims.L4_stock_integral
+  IsoConserve.PaperClaims.detection_complete_bounded
+  IsoConserve.PaperClaims.resolution_credit_core
+  IsoConserve.PaperClaims.canonical_python_step_verified
+  IsoConserve.PaperClaims.positive_trust_survives_loss
+  IsoConserve.PaperClaims.epistemic_invariant
+  IsoConserve.PaperClaims.alignment_invariant
+  IsoConserve.PaperClaims.agency_invariant
+  IsoConserve.PaperClaims.flexibility_collapse_whole_invariant
 )
 
 tmpdir=$(mktemp -d)
@@ -174,13 +186,14 @@ fi
 | Paper invariants | `epistemic_invariant`, `alignment_invariant`, `agency_invariant` | proved | ledger-level corollaries |
 | Flexibility collapse | `IsoConserve.Flexibility.collapse_whole_invariant` | proved | conservation identity only |
 | Noether slice | `IsoConserve.Noether.mixedRel_accounted_clockFree` | proved | uniqueness obstructed |
+| PaperClaims current surface | `IsoConserve.PaperClaims.*` current aliases | proved | future claims omitted until source modules land |
 | Unified core trace | `04d-core-trace-task.md` | review-gated | not implemented |
 | Rate routing | `04f-rate-routing-task.md` | review-gated | not implemented |
 | PN-counter distribution | `04e-lean-task.md` | review-gated | not implemented |
 | Detector/progress signal | `04g-detector-progress-task.md` | review-gated | not implemented |
 | Resolution yield | `04h-resolution-yield-task.md` | review-gated | not implemented |
 | Theorem 1 | `04i-theorem1-task.md` | review-gated | not implemented |
-| PaperClaims closure | `04j-paper-claims-task.md` | review-gated | not implemented |
+| PaperClaims final closure | `04j-paper-claims-task.md` | review-gated | waits for future modules before final aliases |
 MATRIX
 } >"$report"
 

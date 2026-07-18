@@ -109,6 +109,18 @@ allocation.
   theorem `IsoConserve.BudgetWait.detection_sound_with_budget_evidence` combines
   exact-window budget history with closed-component absorption.
 
+## Paper Claims Surface
+
+`IsoConserve.PaperClaims` is the compiled paper-facing alias layer for the current
+proved surface. It contains only aliases or thin corollaries whose source theorems
+already exist, such as `PaperClaims.L1_conservation`,
+`PaperClaims.detection_complete_bounded`, `PaperClaims.resolution_credit_core`,
+`PaperClaims.positive_trust_survives_loss`, and the current invariant aliases.
+
+Review-gated future claims from `04d` through `04j` should be added there only
+after their proof modules land; missing future claims are tracked in
+`NEXT-TASKS.md` and `REVIEW-QUEUE.md`, not represented by placeholders.
+
 ## Reusable Monotonicity Kernel
 
 `IsoConserve.monotone_under_adversary` is the abstract closure lemma suggested by

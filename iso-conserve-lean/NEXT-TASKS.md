@@ -367,8 +367,9 @@ WP4 naming. Implementation waits on review and the unified core/detector surface
 ## Tier E — the paper-facing artifact
 
 **Status:** task file drafted as `04j-paper-claims-task.md`. The reusable audit
-helper exists as `tools/lean-evidence-audit`; `PaperClaims.lean` implementation
-waits on the reviewed theorem modules it will alias.
+helper exists as `tools/lean-evidence-audit`; `IsoConserve.PaperClaims` now exports
+the current proved alias surface. Final `PaperClaims.lean` expansion waits on the
+reviewed theorem modules it will alias.
 
 7. **Coverage table in README** (and mirrored in the combined paper's
    evaluation section): reading → Lean theorem names → what remains
