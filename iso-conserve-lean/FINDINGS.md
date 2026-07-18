@@ -124,21 +124,29 @@
    any finite number of `WaitGraph.step`s, so the L3 "absorbing" wording no longer
    relies on the reader to infer the induction.
 
-15. The budget floor becomes load-bearing only with a full drain window.
+15. The budget floor becomes load-bearing only with an exact drain window.
 
    `IsoConserve.BudgetWait` joins computed wait-graph blocking with detector budget
    drain/refill. The one-step theorem `budget_drop_implies_blocked` proves that a
    strict budget decrease can only occur in the blocked branch. The finite-window
-   theorem `floor_after_full_drain_window_implies_blockedThroughout` proves the
-   important direction: if a process starts at full budget and reaches zero after
-   exactly its budget window, then it was blocked at every step in that window.
-   Final floor alone is intentionally not claimed.
+   theorem `floor_after_exact_budget_window_implies_blockedThroughout` proves the
+   important direction: if a process starts a witness interval with budget `k` and
+   reaches zero after exactly `k` steps, then it was blocked at every step in that
+   window. Final floor alone is intentionally not claimed.
 
 16. End-to-end detector evidence is now packaged, with explicit v3 boundaries.
 
    `detection_sound_with_budget_evidence` combines a supplied closed wait component,
-   final floor, the full-window budget theorem, and no-conversion absorption into an
-   `evidencedDeadlock` certificate. The first component theorem assumes a common
-   `budgetCap = k` for every member of the component, and `BudgetWait` still omits
-   lock acquisition and automatic cycle discovery. These are documented boundaries,
-   not hidden proof assumptions.
+   final floor, the exact-window budget theorem, and no-conversion absorption into
+   an `evidencedDeadlock` certificate. The component theorem now assumes only a
+   common starting budget/window `k`; the earlier positivity and common-`budgetCap`
+   assumptions were removed after the prover exposed the stronger budget-value
+   induction. `BudgetWait` still omits lock acquisition and automatic cycle
+   discovery. These are documented boundaries, not hidden proof assumptions.
+
+17. `BudgetWait` derives path well-formedness internally.
+
+   Review #5 pointed out that the main bridge theorem should not ask callers for a
+   path invariant that follows from `bw_wf_step`. The theorem `bw_wf_stepN` now
+   derives `BWWF (stepN k s)` from `BWWF s`, and the public exact-window and
+   detector-certificate theorems take initial `BWWF` only.

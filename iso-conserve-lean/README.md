@@ -88,9 +88,9 @@ allocation.
 - Budget/wait bridge v3:
   `IsoConserve.BudgetWait.budget_drop_implies_blocked` proves that a one-step
   budget decrease can only come from computed blocking.
-  `IsoConserve.BudgetWait.floor_after_full_drain_window_implies_blockedThroughout`
-  proves that draining from full budget to zero over exactly the budget window
-  implies the process was blocked throughout. The paper-facing theorem
+  `IsoConserve.BudgetWait.floor_after_exact_budget_window_implies_blockedThroughout`
+  proves that draining from any starting budget `k` to zero over exactly `k`
+  steps implies the process was blocked throughout. The paper-facing theorem
   `IsoConserve.BudgetWait.detection_sound_with_budget_evidence` combines this
   budget history with closed-component absorption.
 
@@ -211,21 +211,23 @@ detector budget dynamics:
 - blocked non-converting processes drain one budget unit;
 - unblocked non-converting processes leave budget unchanged;
 - done processes release locks.
+- the drain branch does not separately check `done`, so a done process that still
+  wants a held lock can keep draining; this is harmless for the B1-B4 bridge
+  theorems and kept explicit as a v3 deviation.
 
 The main evidence theorem is
-`floor_after_full_drain_window_implies_blockedThroughout`: if a process starts a
-witness interval at full budget and reaches zero after exactly `budgetCap` steps,
-then it was blocked at every step in that interval. This is the theorem that makes
-the floor evidence load-bearing.
+`floor_after_exact_budget_window_implies_blockedThroughout`: if a process starts a
+witness interval with budget `k` and reaches zero after exactly `k` steps, then it
+was blocked at every step in that interval. This is the theorem that makes the
+floor evidence load-bearing. The full-cap version
+`floor_after_full_drain_window_implies_blockedThroughout` is a corollary.
 
 `detection_sound_with_budget_evidence` packages the end-to-end certificate for a
-supplied closed component with a common budget window `k`: the component remains
-closed, is floored at the end, every member was blocked throughout the window, and
-converted progress inside the component is unchanged.
+supplied closed component whose members share a starting budget/window `k`: the
+component remains closed, is floored at the end, every member was blocked
+throughout the window, and converted progress inside the component is unchanged.
 
-V3 still deliberately omits lock acquisition and automatic cycle discovery. It also
-uses a same-`budgetCap` hypothesis for the component-level theorem; removing that is
-a cleanup theorem, not required for the first bridge.
+V3 still deliberately omits lock acquisition and automatic cycle discovery.
 
 ## What The Plan Abstraction Covers
 
