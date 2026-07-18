@@ -1,0 +1,197 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  lean-evidence-audit [--write]
+
+Runs the current Lean evidence audit for iso-conserve-lean:
+  - lake build
+  - sorry/admit/axiom scan
+  - source/module/theorem counts
+  - #print axioms for the current headline theorem set
+  - current paper-to-Lean matrix
+
+With --write, writes iso-conserve-lean/EVIDENCE-AUDIT.md.
+Without --write, prints the report to stdout.
+USAGE
+}
+
+write=0
+while (($#)); do
+  case "$1" in
+    --write)
+      write=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'lean-evidence-audit: unknown option: %s\n' "$1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+repo=$(git rev-parse --show-toplevel 2>/dev/null) || {
+  printf 'lean-evidence-audit: not inside a git worktree\n' >&2
+  exit 2
+}
+
+lean_dir="$repo/iso-conserve-lean"
+[[ -d "$lean_dir" ]] || {
+  printf 'lean-evidence-audit: missing %s\n' "$lean_dir" >&2
+  exit 2
+}
+
+cd "$lean_dir"
+
+headline_theorems=(
+  IsoConserve.L1_conservation
+  IsoConserve.L2_monotone
+  IsoConserve.L2_drain_monotone
+  IsoConserve.blocked_stock_monotone
+  IsoConserve.L3_absorbing
+  IsoConserve.reachable_deadlock_absorbing
+  IsoConserve.L4_stock_is_integral
+  IsoConserve.yield_conservation
+  IsoConserve.wf_reachable
+  IsoConserve.l4_reachable
+  IsoConserve.polarity_claim_one
+  IsoConserve.trust_on_absence_loss_counterexample
+  IsoConserve.pythonRatePlan_conservation
+  IsoConserve.canonicalPythonStepRel_is_mixedRel
+  IsoConserve.credit_monotone_under_yield_reachable
+  IsoConserve.WaitGraph.L3_waitComponent_absorbing_iter
+  IsoConserve.WaitGraph.detection_sound
+  IsoConserve.BudgetWait.detection_sound_with_budget_evidence
+  IsoConserve.BudgetWait.closed_wait_set_detected_within_budget
+  IsoConserve.Noether.mixedRel_accounted_clockFree
+  IsoConserve.epistemic_invariant
+  IsoConserve.alignment_invariant
+  IsoConserve.agency_invariant
+  IsoConserve.Flexibility.collapse_whole_invariant
+)
+
+tmpdir=$(mktemp -d)
+cleanup() {
+  rm -rf "$tmpdir"
+}
+trap cleanup EXIT
+
+build_log="$tmpdir/build.log"
+scan_log="$tmpdir/scan.log"
+axioms_lean="$tmpdir/Axioms.lean"
+axioms_log="$tmpdir/axioms.log"
+report="$tmpdir/report.md"
+
+build_status=PASS
+if ! lake build >"$build_log" 2>&1; then
+  build_status=FAIL
+fi
+
+scan_status=PASS
+if rg -n "\\bsorry\\b|\\badmit\\b|axiom " IsoConserve >"$scan_log"; then
+  scan_status=FAIL
+else
+  : >"$scan_log"
+fi
+
+{
+  printf 'import IsoConserve\n\n'
+  for theorem in "${headline_theorems[@]}"; do
+    printf '#print axioms %s\n' "$theorem"
+  done
+} >"$axioms_lean"
+
+axioms_status=PASS
+if ! lake env lean "$axioms_lean" >"$axioms_log" 2>&1; then
+  axioms_status=FAIL
+fi
+
+module_count=$(find IsoConserve -type f -name '*.lean' | wc -l | tr -d ' ')
+source_lines=$(find IsoConserve -type f -name '*.lean' -print0 |
+  xargs -0 wc -l | tail -n 1 | awk '{print $1}')
+decl_count=$(rg -n '^[[:space:]]*(theorem|lemma)[[:space:]]+' IsoConserve |
+  wc -l | tr -d ' ')
+commit=$(git -C "$repo" rev-parse --short HEAD)
+dirty="no"
+if [[ -n "$(git -C "$repo" status --short)" ]]; then
+  dirty="yes"
+fi
+
+{
+  printf '# Lean Evidence Audit\n\n'
+  printf -- '- Git HEAD: `%s`\n' "$commit"
+  printf -- '- Worktree dirty at audit run: `%s`\n' "$dirty"
+  printf -- '- Build: `%s`\n' "$build_status"
+  printf -- '- Sorry/admit/axiom scan: `%s`\n' "$scan_status"
+  printf -- '- Headline `#print axioms`: `%s`\n' "$axioms_status"
+  printf -- '- Lean modules: `%s`\n' "$module_count"
+  printf -- '- Source lines under `IsoConserve/`: `%s`\n' "$source_lines"
+  printf -- '- Syntactic theorem/lemma declarations: `%s`\n\n' "$decl_count"
+
+  printf '## Build Log\n\n'
+  printf '```text\n'
+  cat "$build_log"
+  printf '```\n\n'
+
+  printf '## Sorry Admit Axiom Scan\n\n'
+  if [[ "$scan_status" == PASS ]]; then
+    printf 'No matches under `IsoConserve/`.\n\n'
+  else
+    printf '```text\n'
+    cat "$scan_log"
+    printf '```\n\n'
+  fi
+
+  printf '## Headline Axioms\n\n'
+  printf '```text\n'
+  cat "$axioms_log"
+  printf '```\n\n'
+
+  printf '## Module Inventory\n\n'
+  printf '```text\n'
+  find IsoConserve -type f -name '*.lean' | sort
+  printf '```\n\n'
+
+  printf '## Current Paper-To-Lean Matrix\n\n'
+  cat <<'MATRIX'
+| Paper claim | Current Lean evidence | Status | Boundary |
+|---|---|---|---|
+| L1 conservation | `IsoConserve.L1_conservation`, reachable accounting corollaries | proved | plan-abstracted kernel |
+| L2 monotonicity | `IsoConserve.blocked_stock_monotone`, `IsoConserve.L2_drain_monotone` | proved | repaired blocked/drain scope |
+| L3 absorption | `IsoConserve.L3_absorbing`, `IsoConserve.WaitGraph.L3_waitComponent_absorbing_iter` | proved | old kernel plus supplied closed wait component |
+| L4 stock/integral | `IsoConserve.L4_stock_is_integral`, `IsoConserve.l4_reachable` | proved | cached field, not yet trace-derived |
+| Detection bounded completeness | `IsoConserve.BudgetWait.closed_wait_set_detected_within_budget` | proved | supplied closed component/window evidence |
+| Detection soundness with evidence | `IsoConserve.BudgetWait.detection_sound_with_budget_evidence` | proved | supplied closed component |
+| Resolution credit core | `IsoConserve.credit_monotone_under_yield_reachable` | proved | stock-to-credit core, not full restart yield |
+| Caching polarity | `IsoConserve.polarity_claim_one` and counterexample | proved | positive-trust lattice theorem |
+| Canonical Python flow step | `IsoConserve.canonicalPythonStepRel_is_mixedRel` | proved | supplied effective weights |
+| Paper invariants | `epistemic_invariant`, `alignment_invariant`, `agency_invariant` | proved | ledger-level corollaries |
+| Flexibility collapse | `IsoConserve.Flexibility.collapse_whole_invariant` | proved | conservation identity only |
+| Noether slice | `IsoConserve.Noether.mixedRel_accounted_clockFree` | proved | uniqueness obstructed |
+| Unified core trace | `04d-core-trace-task.md` | review-gated | not implemented |
+| Rate routing | `04f-rate-routing-task.md` | review-gated | not implemented |
+| PN-counter distribution | `04e-lean-task.md` | review-gated | not implemented |
+| Detector/progress signal | `04g-detector-progress-task.md` | review-gated | not implemented |
+| Resolution yield | `04h-resolution-yield-task.md` | review-gated | not implemented |
+| Theorem 1 | `04i-theorem1-task.md` | review-gated | not implemented |
+| PaperClaims closure | `04j-paper-claims-task.md` | review-gated | not implemented |
+MATRIX
+} >"$report"
+
+if [[ "$build_status" != PASS || "$scan_status" != PASS || "$axioms_status" != PASS ]]; then
+  cat "$report"
+  exit 1
+fi
+
+if ((write)); then
+  cp "$report" "$lean_dir/EVIDENCE-AUDIT.md"
+  printf 'wrote %s\n' "$lean_dir/EVIDENCE-AUDIT.md"
+else
+  cat "$report"
+fi

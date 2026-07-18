@@ -8,6 +8,15 @@ Build:
 lake build
 ```
 
+Evidence audit:
+
+```sh
+../tools/lean-evidence-audit
+```
+
+Use `../tools/lean-evidence-audit --write` from `iso-conserve-lean/` to generate
+`EVIDENCE-AUDIT.md` for a release or paper-pinning pass.
+
 The package is pinned to Lean `v4.30.0` and intentionally uses only Lean/Std so it
 can build offline in this workspace.
 
