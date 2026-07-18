@@ -426,6 +426,9 @@ Implementation waits on review and the unified core from `04d-core-trace-task.md
 **WP6 status:** task file drafted as `04i-theorem1-task.md`. Implementation waits
 on review and the dependency-return vocabulary from the unified core.
 
+**Review queue:** `REVIEW-QUEUE.md` records the review order, per-task sign-off
+questions, and implementation order after review.
+
 ## Four annotations for the goblin before starting
 
 1. **Do a delta audit first.** The Pro states plainly they worked from the
