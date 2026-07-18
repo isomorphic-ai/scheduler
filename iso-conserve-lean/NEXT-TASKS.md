@@ -419,6 +419,9 @@ this side of the repo.*
    counterexample (needs restating in the new trace semantics);
    `credit_monotone` ≈ `credit_monotone_under_yield_reachable`. The
    Noether module postdates their view entirely.
+
+   **Status:** completed in `DELTA-AUDIT.md`. Next action is not coding; it is the
+   WP1+WP2 task file for unified ontology and trace semantics.
 2. **WP1/WP2 are the expensive part — lift, don't discard.** The Pro's
    unification (one state that is ledger AND graph; exec-vs-cure step split;
    trace-derived `flowIntegral` with the field proven to be a cache) is the
