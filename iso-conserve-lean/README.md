@@ -93,9 +93,12 @@ allocation.
   steps implies the process was blocked throughout.
   `IsoConserve.BudgetWait.observed_floor_after_window_start_implies_evidence`
   turns an observed floor time plus a supplied window start into an existential
-  `budgetWindowEvidence` certificate. The paper-facing theorem
-  `IsoConserve.BudgetWait.detection_sound_with_budget_evidence` combines this
-  budget history with closed-component absorption.
+  `budgetWindowEvidence` certificate.
+  `IsoConserve.BudgetWait.closed_wait_set_detected_within_budget` proves bounded
+  detection completeness: a closed component floors within any observation bound
+  at least as large as each member's starting budget. The paper-facing soundness
+  theorem `IsoConserve.BudgetWait.detection_sound_with_budget_evidence` combines
+  exact-window budget history with closed-component absorption.
 
 ## Reusable Monotonicity Kernel
 
@@ -256,6 +259,15 @@ require trace/log state outside this bridge model.
 supplied closed component whose members share a starting budget/window `k`: the
 component remains closed, is floored at the end, every member was blocked
 throughout the window, and converted progress inside the component is unchanged.
+
+`closed_member_budget_after` proves the matching completeness direction for closed
+components: every member's budget after `k` bridge steps is exactly its starting
+budget minus `k` (Nat truncated subtraction). Consequently
+`closed_floored_within` floors a closed component once the observation bound is at
+least every member's starting budget, and
+`closed_wait_set_detected_within_budget` packages the resulting
+`evidencedDeadlock`. This is the bounded logical-latency theorem; it is measured
+in bridge steps, not wall-clock time.
 
 V3 still deliberately omits lock acquisition and automatic cycle discovery.
 
