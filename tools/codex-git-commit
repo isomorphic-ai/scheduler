@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  codex-git-commit -m "message" [--allow-delete] -- path [path ...]
+
+Stages exactly the explicit file paths passed after "--", checks the staged
+diff, prints a staged summary, and creates one normal git commit.
+
+Safety rules:
+  - refuses to run with an already-staged index
+  - refuses broad pathspecs such as ".", directories, globs, pathspec magic,
+    absolute paths, and paths containing ".." segments
+  - refuses deleted tracked files unless --allow-delete is passed
+  - never runs reset, checkout, clean, or amend
+USAGE
+}
+
+die() {
+  printf 'codex-git-commit: %s\n' "$*" >&2
+  exit 2
+}
+
+message=
+allow_delete=0
+
+while (($#)); do
+  case "$1" in
+    -m|--message)
+      (($# >= 2)) || die "missing commit message after $1"
+      message=$2
+      shift 2
+      ;;
+    --allow-delete)
+      allow_delete=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      die "unknown option: $1"
+      ;;
+    *)
+      die "paths must come after --"
+      ;;
+  esac
+done
+
+[[ -n "$message" ]] || die "commit message is required"
+(($# > 0)) || die "at least one explicit path is required after --"
+
+repo=$(git rev-parse --show-toplevel 2>/dev/null) ||
+  die "not inside a git worktree"
+cd "$repo"
+
+git diff --cached --quiet --exit-code ||
+  die "index already has staged changes; unstage them before using this wrapper"
+
+validate_path() {
+  local path=$1
+
+  [[ -n "$path" ]] || die "empty path is not allowed"
+  [[ "$path" != "." && "$path" != "./" ]] ||
+    die "broad pathspec is not allowed: $path"
+  [[ "$path" != /* ]] || die "absolute paths are not allowed: $path"
+  [[ "$path" != :* ]] || die "git pathspec magic is not allowed: $path"
+  [[ "$path" != *$'\n'* ]] || die "paths containing newlines are not allowed"
+  [[ "$path" != *'*'* && "$path" != *'?'* && "$path" != *'['* ]] ||
+    die "globs are not allowed: $path"
+  [[ "$path" != ".." && "$path" != ../* && "$path" != */../* && "$path" != */.. ]] ||
+    die "paths containing .. segments are not allowed: $path"
+  [[ ! -d "$path" ]] || die "directories are not allowed; pass explicit files: $path"
+
+  if [[ ! -e "$path" ]]; then
+    if git ls-files --error-unmatch -- "$path" >/dev/null 2>&1; then
+      ((allow_delete == 1)) ||
+        die "deleted tracked path requires --allow-delete: $path"
+    else
+      die "path does not exist and is not tracked: $path"
+    fi
+  fi
+}
+
+for path in "$@"; do
+  validate_path "$path"
+done
+
+git add -- "$@"
+
+if git diff --cached --quiet --exit-code; then
+  die "staged diff is empty for the requested paths"
+fi
+
+git diff --cached --check
+
+printf '\nStaged changes:\n'
+git diff --cached --stat
+printf '\nStaged paths:\n'
+git diff --cached --name-status
+printf '\nCommitting...\n'
+
+git commit -m "$message"
