@@ -414,6 +414,9 @@ this side of the repo.*
   self-contained and can interleave wherever they don't touch the WP1/2
   core refactor.
 
+**WP3 status:** task file drafted as `04g-detector-progress-task.md`.
+Implementation waits on review and the unified core from `04d-core-trace-task.md`.
+
 ## Four annotations for the goblin before starting
 
 1. **Do a delta audit first.** The Pro states plainly they worked from the
