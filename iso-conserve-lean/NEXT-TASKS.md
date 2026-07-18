@@ -460,3 +460,7 @@ this side of the repo.*
    combined paper's text (not just this feedback about it) still needs to
    ship into the repo. The feedback file quotes the claims' shapes; the
    task files should quote the claims.
+
+   **Status:** WP1+WP2 task file drafted as `04d-core-trace-task.md`, anchored to
+   `paper08-expanded.md` §4 and the Pro feedback. Implementation is now gated on
+   review of that task file.
