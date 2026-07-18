@@ -348,6 +348,9 @@ review of that task file.
 
 ## Tier D — resolution policy (task file only after B lands)
 
+**Status:** task file drafted as `04h-resolution-yield-task.md` under the Round 4b
+WP4 naming. Implementation waits on review and the unified core/detector surface.
+
 6. **4.2's missing half.** Extend BudgetWait (or a v4) with a `yield`
    action: a chosen member of a supplied closed component releases its
    holds and banks `converted → credit`; prove the component is no
