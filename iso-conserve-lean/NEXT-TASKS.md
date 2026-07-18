@@ -298,6 +298,10 @@ member's starting budget floors the closed component.
 
 ## Tier B — the flow module (write `04d-lean-task.md` FIRST; the largest true gap)
 
+**Status:** task file drafted as `04f-rate-routing-task.md` under the Round 4b
+WP5 naming. Implementation waits on review and the unified core from
+`04d-core-trace-task.md`.
+
 4. **4.3: effective rates from the wait graph.** The one reading with
    real unformalized mathematics. Define, on a wait relation restricted
    to an acyclic domain, `eff : Pid → Qty` by well-founded recursion:
