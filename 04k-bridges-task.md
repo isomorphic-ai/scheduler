@@ -53,6 +53,18 @@ windowed claim.
 
 ## WP-B1 — The commuting square: CoreRel ↔ typed traces
 
+**Status:** completed without the fallback. `EventRel` mirrors all seven
+`CoreRel` arms and carries their dependent plan/admissibility evidence;
+`TypedRun` is exactly equivalent to `RTC CoreRel`; and
+`L4_for_core_reachable` derives the stock/credit integral from the certified
+operational trace. The old arbitrary-delta `applyEvent`/`runState` semantics were
+removed, and `Run` now aliases `TypedRun`.
+
+**Reviewed deviation:** the obligations comment formerly at the end of
+`CoreTrace.lean` describes four old-model-to-unified-model simulations, not the
+CoreRel↔trace bridge. B1 cannot honestly discharge those simulations, so the
+comment is retained with its scope clarified and FINDINGS 36 records why.
+
 Adopt the Pro's targets verbatim:
 
 ```

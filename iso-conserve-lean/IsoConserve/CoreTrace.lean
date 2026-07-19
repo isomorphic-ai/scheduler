@@ -897,6 +897,7 @@ theorem deadlock_exec_fixed {n m : Nat}
           exact hd.1 p) hrun)
 
 inductive ExecEvent (n m : Nat) where
+  | work (flow spent : ProcId n -> Qty)
   | flow (delta : ProcId n -> Qty)
   | convert (spent : ProcId n -> Qty)
   | acquire (p : ProcId n) (l : LockId m)
@@ -914,6 +915,7 @@ inductive StepEvent (n m : Nat) where
 
 def stockDelta {n m : Nat} (e : StepEvent n m) (p : ProcId n) : Qty :=
   match e with
+  | StepEvent.exec (ExecEvent.work flow spent) => flow p - spent p
   | StepEvent.exec (ExecEvent.flow delta) => delta p
   | StepEvent.exec (ExecEvent.convert spent) => -spent p
   | StepEvent.exec (ExecEvent.acquire _ _) => 0
@@ -937,21 +939,141 @@ def flowIntegral {n m : Nat} : Trace n m -> ProcId n -> Qty
   | [], _ => 0
   | e :: trace, p => netFlow e p + flowIntegral trace p
 
-def applyEvent {n m : Nat} (s : CoreState n m)
-    (e : StepEvent n m) : CoreState n m :=
-  { s with
-    procs := fun p =>
-      { s.procs p with
-        stock := (s.procs p).stock + stockDelta e p
-        credit := (s.procs p).credit + creditDelta e p } }
+def eventOfWork {n m : Nat} (s : CoreState n m) (plan : WorkPlan s) :
+    StepEvent n m :=
+  StepEvent.exec (ExecEvent.work plan.flow
+    (fun p => s.convertCost * (plan.convert p : Qty)))
 
-def runState {n m : Nat} (s : CoreState n m) : Trace n m -> CoreState n m
-  | [] => s
-  | e :: trace => runState (applyEvent s e) trace
+def eventOfDrain {n m : Nat} {s : CoreState n m} (plan : DrainPlan s) :
+    StepEvent n m :=
+  StepEvent.cure (CureEvent.drain plan.amount)
 
-def Run {n m : Nat} (initial : WFState n m)
+def eventOfYield {n m : Nat} {s : CoreState n m} (plan : YieldPlan s) :
+    StepEvent n m :=
+  StepEvent.cure (CureEvent.yield plan.amount)
+
+def eventOfRoute {n m : Nat} {s : CoreState n m} (plan : RoutePlan s) :
+    StepEvent n m :=
+  StepEvent.cure (CureEvent.route plan.delta)
+
+inductive EventRel {n m : Nat} :
+    WFState n m -> StepEvent n m -> WFState n m -> Prop where
+  | work {s t : WFState n m} (plan : WorkPlan s.state)
+      (ht : t.state = workStep s.state plan) :
+      EventRel s (eventOfWork s.state plan) t
+  | acquire {s t : WFState n m} (p : ProcId n) (l : LockId m)
+      (hrun : runnable s.state p)
+      (hfree : forall q, s.state.holds q l = false)
+      (ht : t.state = acquireStep s.state p l) :
+      EventRel s (StepEvent.exec (ExecEvent.acquire p l)) t
+  | releaseNormally {s t : WFState n m} (p : ProcId n) (l : LockId m)
+      (hrun : runnable s.state p)
+      (ht : t.state = releaseStep s.state p l) :
+      EventRel s (StepEvent.exec (ExecEvent.releaseNormally p l)) t
+  | drain {s t : WFState n m} (plan : DrainPlan s.state)
+      (ht : t.state = drainStep s.state plan) :
+      EventRel s (eventOfDrain plan) t
+  | yield {s t : WFState n m} (plan : YieldPlan s.state)
+      (ht : t.state = yieldStep s.state plan) :
+      EventRel s (eventOfYield plan) t
+  | route {s t : WFState n m} (plan : RoutePlan s.state)
+      (ht : t.state = routeStep s.state plan) :
+      EventRel s (eventOfRoute plan) t
+  | releaseClaim {s t : WFState n m} (p : ProcId n) (l : LockId m)
+      (ht : t.state = releaseStep s.state p l) :
+      EventRel s (StepEvent.cure (CureEvent.releaseClaim p l)) t
+
+theorem eventRel_is_core_step {n m : Nat} {s t : WFState n m}
+    {e : StepEvent n m} (h : EventRel s e t) : CoreRel s t := by
+  cases h with
+  | work plan ht =>
+      left; left
+      exact ⟨plan, ht⟩
+  | acquire p l hrun hfree ht =>
+      left; right; left
+      exact ⟨p, l, hrun, hfree, ht⟩
+  | releaseNormally p l hrun ht =>
+      left; right; right
+      exact ⟨p, l, hrun, ht⟩
+  | drain plan ht =>
+      right; left
+      exact ⟨plan, ht⟩
+  | yield plan ht =>
+      right; right; left
+      exact ⟨plan, ht⟩
+  | route plan ht =>
+      right; right; right; left
+      exact ⟨plan, ht⟩
+  | releaseClaim p l ht =>
+      right; right; right; right
+      exact ⟨p, l, ht⟩
+
+theorem core_step_has_event {n m : Nat} {s t : WFState n m}
+    (h : CoreRel s t) : exists e, EventRel s e t := by
+  rcases h with hexec | hcure
+  · rcases hexec with hwork | hacquire | hrelease
+    · rcases hwork with ⟨plan, ht⟩
+      exact ⟨eventOfWork s.state plan, EventRel.work plan ht⟩
+    · rcases hacquire with ⟨p, l, hrun, hfree, ht⟩
+      exact ⟨StepEvent.exec (ExecEvent.acquire p l),
+        EventRel.acquire p l hrun hfree ht⟩
+    · rcases hrelease with ⟨p, l, hrun, ht⟩
+      exact ⟨StepEvent.exec (ExecEvent.releaseNormally p l),
+        EventRel.releaseNormally p l hrun ht⟩
+  · rcases hcure with hdrain | hyield | hroute | hrelease
+    · rcases hdrain with ⟨plan, ht⟩
+      exact ⟨eventOfDrain plan, EventRel.drain plan ht⟩
+    · rcases hyield with ⟨plan, ht⟩
+      exact ⟨eventOfYield plan, EventRel.yield plan ht⟩
+    · rcases hroute with ⟨plan, ht⟩
+      exact ⟨eventOfRoute plan, EventRel.route plan ht⟩
+    · rcases hrelease with ⟨p, l, ht⟩
+      exact ⟨StepEvent.cure (CureEvent.releaseClaim p l),
+        EventRel.releaseClaim p l ht⟩
+
+theorem core_step_iff_has_event {n m : Nat} {s t : WFState n m} :
+    CoreRel s t <-> exists e, EventRel s e t := by
+  constructor
+  · exact core_step_has_event
+  · rintro ⟨e, he⟩
+    exact eventRel_is_core_step he
+
+inductive TypedRun {n m : Nat} :
+    WFState n m -> Trace n m -> WFState n m -> Prop where
+  | nil (s : WFState n m) : TypedRun s [] s
+  | snoc {s t u : WFState n m} {trace : Trace n m} {e : StepEvent n m} :
+      TypedRun s trace t -> EventRel t e u -> TypedRun s (trace ++ [e]) u
+
+theorem typedRun_is_core_reachable {n m : Nat}
+    {s t : WFState n m} {trace : Trace n m}
+    (hrun : TypedRun s trace t) : RTC CoreRel s t := by
+  induction hrun with
+  | nil =>
+      exact RTC.refl _
+  | snoc hrun hstep ih =>
+      exact RTC.tail ih (eventRel_is_core_step hstep)
+
+theorem core_reachable_has_trace {n m : Nat} {s t : WFState n m}
+    (reach : RTC CoreRel s t) : exists trace, TypedRun s trace t := by
+  induction reach with
+  | refl =>
+      exact ⟨[], TypedRun.nil _⟩
+  | tail reach hstep ih =>
+      rcases ih with ⟨trace, hrun⟩
+      rcases core_step_has_event hstep with ⟨e, hevent⟩
+      exact ⟨trace ++ [e], TypedRun.snoc hrun hevent⟩
+
+theorem core_reachable_iff_has_typed_trace {n m : Nat}
+    {s t : WFState n m} :
+    RTC CoreRel s t <-> exists trace, TypedRun s trace t := by
+  constructor
+  · exact core_reachable_has_trace
+  · rintro ⟨trace, hrun⟩
+    exact typedRun_is_core_reachable hrun
+
+abbrev Run {n m : Nat} (initial : WFState n m)
     (trace : Trace n m) (final : WFState n m) : Prop :=
-  final.state = runState initial.state trace
+  TypedRun initial trace final
 
 theorem flowIntegral_nil {n m : Nat} (p : ProcId n) :
     flowIntegral ([] : Trace n m) p = 0 := by
@@ -982,34 +1104,57 @@ theorem yield_preserves_integral {n m : Nat} (trace : Trace n m)
   unfold netFlow stockDelta creditDelta
   grind
 
-theorem stock_credit_applyEvent {n m : Nat} (s : CoreState n m)
-    (e : StepEvent n m) (p : ProcId n) :
-    ((applyEvent s e).procs p).stock + ((applyEvent s e).procs p).credit =
-      (s.procs p).stock + (s.procs p).credit + netFlow e p := by
-  unfold applyEvent netFlow
-  grind
+def stockCredit {n m : Nat} (s : CoreState n m) (p : ProcId n) : Qty :=
+  (s.procs p).stock + (s.procs p).credit
 
-theorem runState_stock_credit_eq_initial_add_integral {n m : Nat}
-    (s : CoreState n m) (trace : Trace n m) (p : ProcId n) :
-    ((runState s trace).procs p).stock + ((runState s trace).procs p).credit =
-      (s.procs p).stock + (s.procs p).credit + flowIntegral trace p := by
-  induction trace generalizing s with
-  | nil =>
-      simp [runState, flowIntegral]
+theorem eventRel_stockCredit {n m : Nat} {s t : WFState n m}
+    {e : StepEvent n m} (hevent : EventRel s e t) (p : ProcId n) :
+    stockCredit t.state p = stockCredit s.state p + netFlow e p := by
+  cases hevent with
+  | work plan ht =>
+      rw [ht]
+      unfold stockCredit eventOfWork netFlow stockDelta creditDelta workStep workProc
       grind
-  | cons e trace ih =>
-      simp [runState, flowIntegral]
-      calc
-        ((runState (applyEvent s e) trace).procs p).stock +
-            ((runState (applyEvent s e) trace).procs p).credit =
-          ((applyEvent s e).procs p).stock + ((applyEvent s e).procs p).credit +
-            flowIntegral trace p := ih (applyEvent s e)
-        _ = (s.procs p).stock + (s.procs p).credit + netFlow e p +
-            flowIntegral trace p := by
-              rw [stock_credit_applyEvent]
-        _ = (s.procs p).stock + (s.procs p).credit +
-            (netFlow e p + flowIntegral trace p) := by
-              grind
+  | acquire actor lock hrun hfree ht =>
+      rw [ht]
+      by_cases hp : p = actor
+      · simp [stockCredit, netFlow, stockDelta, creditDelta, acquireStep, hp]
+        grind
+      · simp [stockCredit, netFlow, stockDelta, creditDelta, acquireStep, hp]
+        grind
+  | releaseNormally actor lock hrun ht =>
+      rw [ht]
+      unfold stockCredit netFlow stockDelta creditDelta releaseStep
+      grind
+  | drain plan ht =>
+      rw [ht]
+      unfold stockCredit eventOfDrain netFlow stockDelta creditDelta drainStep drainProc
+      grind
+  | yield plan ht =>
+      rw [ht]
+      unfold stockCredit eventOfYield netFlow stockDelta creditDelta yieldStep yieldProc
+      grind
+  | route plan ht =>
+      rw [ht]
+      unfold stockCredit eventOfRoute netFlow stockDelta creditDelta routeStep routeProc
+      grind
+  | releaseClaim actor lock ht =>
+      rw [ht]
+      unfold stockCredit netFlow stockDelta creditDelta releaseStep
+      grind
+
+theorem typedRun_stockCredit_eq_initial_add_integral {n m : Nat}
+    {initial final : WFState n m} {trace : Trace n m}
+    (hrun : TypedRun initial trace final) (p : ProcId n) :
+    stockCredit final.state p =
+      stockCredit initial.state p + flowIntegral trace p := by
+  induction hrun with
+  | nil =>
+      unfold stockCredit flowIntegral
+      grind
+  | snoc hrun hevent ih =>
+      rw [eventRel_stockCredit hevent p, ih, flowIntegral_snoc]
+      grind
 
 theorem stock_credit_eq_initial_add_integral {n m : Nat}
     {initial final : WFState n m} {trace : Trace n m}
@@ -1017,8 +1162,7 @@ theorem stock_credit_eq_initial_add_integral {n m : Nat}
     (final.state.procs p).stock + (final.state.procs p).credit =
       (initial.state.procs p).stock + (initial.state.procs p).credit +
         flowIntegral trace p := by
-  rw [hrun]
-  exact runState_stock_credit_eq_initial_add_integral initial.state trace p
+  exact typedRun_stockCredit_eq_initial_add_integral hrun p
 
 theorem L4_stock_is_trace_integral {n m : Nat}
     {initial final : WFState n m} {trace : Trace n m}
@@ -1043,6 +1187,28 @@ theorem cached_integral_eq_trace_integral {n m : Nat}
     cachedIntegral initial final p = flowIntegral trace p := by
   unfold cachedIntegral
   have h := stock_credit_eq_initial_add_integral hrun p
+  grind
+
+theorem L4_for_core_reachable {n m : Nat} {initial final : WFState n m}
+    (reach : RTC CoreRel initial final) :
+    exists trace, TypedRun initial trace final /\ forall p,
+      cachedIntegral initial final p = flowIntegral trace p := by
+  rcases core_reachable_has_trace reach with ⟨trace, hrun⟩
+  refine ⟨trace, hrun, ?_⟩
+  intro p
+  exact cached_integral_eq_trace_integral hrun p
+
+theorem L4_zero_initial_for_core_reachable {n m : Nat}
+    {initial final : WFState n m}
+    (reach : RTC CoreRel initial final)
+    (hzero : forall p, stockCredit initial.state p = 0) :
+    exists trace, TypedRun initial trace final /\ forall p,
+      stockCredit final.state p = flowIntegral trace p := by
+  rcases core_reachable_has_trace reach with ⟨trace, hrun⟩
+  refine ⟨trace, hrun, ?_⟩
+  intro p
+  have h := typedRun_stockCredit_eq_initial_add_integral hrun p
+  rw [hzero p] at h
   grind
 
 def coreBeforeProc : CoreProc 0 :=
@@ -1374,7 +1540,9 @@ theorem cure_can_break_absorption :
   · exact cycle_release_breaks_closed
 
 /-
-Compatibility obligations for a future full old-to-new simulation:
+Separate compatibility obligations for a future full old-to-new simulation.
+The operational `CoreRel`/`TypedRun` commuting square does not imply these
+cross-model simulations:
 
 - old L1 conservation should lift to `core_reachable_conserves_accounted`;
 - old blocked-stock monotonicity should lift to `blocked_stock_monotone`;

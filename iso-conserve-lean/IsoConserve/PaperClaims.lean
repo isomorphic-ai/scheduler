@@ -100,6 +100,14 @@ theorem core_trace_integral {n m : Nat}
       CoreTrace.flowIntegral trace p :=
   CoreTrace.L4_stock_is_trace_integral hrun hzero p
 
+theorem L4_for_core_reachable {n m : Nat}
+    {initial final : CoreTrace.WFState n m}
+    (reach : RTC CoreTrace.CoreRel initial final) :
+    exists trace, CoreTrace.TypedRun initial trace final /\ forall p,
+      CoreTrace.cachedIntegral initial final p =
+        CoreTrace.flowIntegral trace p :=
+  CoreTrace.L4_for_core_reachable reach
+
 theorem detection_sound {n m : Nat}
     {s0 : BudgetWait.BWState n m} {C : BudgetWait.Pid n -> Bool} {k : Nat}
     (hC0 : BudgetWait.closedWaitSet s0 C)

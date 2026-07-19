@@ -139,6 +139,7 @@ Use this map to prevent headline-name drift across sibling task files:
 | `L2_monotonicity` | `IsoConserve.CoreTrace.blocked_stock_monotone` or the existing repaired kernel alias |
 | `L3_absorption` | `IsoConserve.CoreTrace.deadlock_exec_fixed` / existing L3 absorption aliases, scoped honestly |
 | `L4_stock_integral` | `IsoConserve.CoreTrace.L4_stock_is_trace_integral` and/or `IsoConserve.L4_stock_is_integral` |
+| `L4_for_core_reachable` | `IsoConserve.CoreTrace.L4_for_core_reachable` (one certified `TypedRun` for every `RTC CoreRel` execution) |
 | `detection_sound` | `IsoConserve.DetectorProgress.detector_sound` or `BudgetWait.detection_sound_with_budget_evidence`, named by scope |
 | `detection_complete_bounded` | `IsoConserve.DetectorProgress.detection_latency_le_budget` / BudgetWait bounded-completeness aliases |
 | `live_process_not_detected` | `IsoConserve.DetectorProgress.live_process_not_detected` |

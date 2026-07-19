@@ -376,3 +376,28 @@
    therefore a finite genuine window whose later non-converting runnable attempt
    does not drain; repeated block/unblock/reconvert examples belong to the
    CoreRel-to-trace bridge rather than being implied here.
+
+36. Core reachability and trace-derived L4 now form an exact commuting square.
+
+   `CoreTrace.EventRel` has one constructor for each of the three `ExecRel` and
+   four `CureRel` arms. Work, drain, yield, and route events are projected from
+   their dependent plans; acquire and normal release retain their runnable/free
+   evidence; claim release mirrors the current unguarded relation exactly.
+   `core_step_iff_has_event` and `core_reachable_iff_has_typed_trace` prove that
+   certified events and `TypedRun`s neither widen nor narrow `CoreRel`.
+
+   The old `applyEvent`/`runState` path updated only stock and credit from arbitrary
+   deltas, so it could not witness an actual work step's counters/budget/done
+   updates or an acquire/release step's graph updates. It has been removed.
+   `Run` now aliases `TypedRun`; `eventRel_stockCredit` proves the one-step
+   projection from each full transition; and `L4_for_core_reachable` constructs a
+   certified trace whose `flowIntegral` equals every process's final-minus-initial
+   stock plus credit. `L4_zero_initial_for_core_reachable` is the PDF's
+   `S_i + C_i = I_i` form for zero-initial ledgers.
+
+   04k asked B1 to delete the final compatibility-obligations comment, but that
+   comment names old-L1, old-blocked-stock, old-BudgetWait, and old-yield
+   simulations into the unified model. Those are distinct cross-model theorems,
+   not consequences of the CoreRel↔TypedRun bridge. The comment remains, with its
+   separate scope made explicit; deleting it would falsely report four additional
+   obligations as discharged.
