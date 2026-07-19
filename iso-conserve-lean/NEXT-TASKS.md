@@ -386,9 +386,9 @@ scoped to the Nat-unit toy variant.
 **Status:** implemented for the current proved surface after Review #7's 04j
 task-file repair. `IsoConserve.PaperClaims` now aliases the unified core,
 detector/progress, resolution yield, rate routing, PN-counter, flexibility,
-polarity, invariant, and finite-action Theorem 1 theorems. The reusable audit
-helper exists as `tools/lean-evidence-audit`, checks the headline axiom baseline,
-and regenerates `EVIDENCE-AUDIT.md`.
+polarity, invariant, and dynamical finite-certified-policy Theorem 1 theorems.
+The reusable audit helper exists as `tools/lean-evidence-audit`, checks the
+headline axiom baseline, and regenerates `EVIDENCE-AUDIT.md`.
 
 7. **Coverage table in README** (and mirrored in the combined paper's
    evaluation section): reading → Lean theorem names → what remains
@@ -396,8 +396,9 @@ and regenerates `EVIDENCE-AUDIT.md`.
    must cite exact names at a pinned commit. Include the Noether
    obstruction (FINDINGS 20) as a cited *result*: the naive uniqueness
    reading is machine-checked false; normalized uniqueness is future
-   work with its own task file. Remaining partial rows are the full
-   unrestricted policy theorem and engine/production-only claims.
+   work with its own task file. The unrestricted legacy `Policy` theorem is not
+   a valid universal strengthening because it admits unrelated and uncertified
+   actions; engine/production-only claims remain empirical or out of scope.
 
 ## Standing rules: all carried. Task-file-first applies to Tiers B, C, D.
 
@@ -450,11 +451,18 @@ bounded detection, slow-live non-flooring under the repaired full-budget premise
 and the `SIG_PROGRESS` useful/spinner/liar split. Automatic component discovery
 and Byzantine enforcement remain outside the theorem.
 
-**WP6 status:** finite-action core implemented in `IsoConserve.TheoremOne` after
-Review #7's task-file fixes. The module proves strict route-over-hoard dominance
-for stranded claims, finite `{hoard, route, release}` selfish/generous optimality,
-and the standalone debt-ledger mini-model. The full unrestricted policy theorem
-and strengthened invariant-family aliases remain for a later 04i/04j closure pass.
+**WP6 status:** the initial installed-payoff finite-action kernel and standalone
+debt-ledger mini-model are implemented in `IsoConserve.TheoremOne`; 04k's B3
+upgrade now derives the paper-facing payoffs from certified core executions.
+Under the explicit distinct-endpoint witness, `claimRoutePlan` makes `routeState`
+an actual `RouteRel` endpoint; `conversionReturnStep` returns the converted result
+to the beneficiary, and endpoint counter deltas prove exact value under the
+divisibility witness `q = κ · k`. The accepted finite
+`{hoard, route, release}` certified-policy fallback proves route-over-hoard
+dominance and selfish/generous-optimum equality. No unrestricted theorem is
+claimed for the legacy `Policy`: its unrelated, uncertified actions make the
+universal statement false. Strengthened invariant-family aliases remain a
+separate closure item.
 
 **Review queue:** `REVIEW-QUEUE.md` records the review order, per-task sign-off
 questions, and implementation order after review.

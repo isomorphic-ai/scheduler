@@ -53,12 +53,13 @@ windowed claim.
 
 ## WP-B1 — The commuting square: CoreRel ↔ typed traces
 
-**Status:** completed without the fallback. `EventRel` mirrors all seven
-`CoreRel` arms and carries their dependent plan/admissibility evidence;
+**Status:** completed without the fallback. `EventRel` mirrored all seven
+then-current `CoreRel` arms and carried their dependent plan/admissibility evidence;
 `TypedRun` is exactly equivalent to `RTC CoreRel`; and
 `L4_for_core_reachable` derives the stock/credit integral from the certified
 operational trace. The old arbitrary-delta `applyEvent`/`runState` semantics were
-removed, and `Run` now aliases `TypedRun`.
+removed, and `Run` now aliases `TypedRun`. WP-B3 later threads the eighth,
+conversion-return arm through the same equivalence.
 
 **Reviewed deviation:** the obligations comment formerly at the end of
 `CoreTrace.lean` describes four old-model-to-unified-model simulations, not the
@@ -89,11 +90,12 @@ in the theorem name AND a FINDINGS entry is acceptable for this round.
 `WorkPlan.completion_holds_nothing` rules out the one invalid raw work update:
 marking a not-yet-done lock holder done while leaving `holds`
 unchanged. `wf_workStep`, `wf_drainStep`, `wf_yieldStep`, `wf_routeStep`,
-`wf_acquireStep`, and `wf_releaseStep` prove every `CoreWF` field for all seven
-relation arms (the two release arms share the same transformer theorem), while
+`wf_acquireStep`, and `wf_releaseStep` prove every `CoreWF` field for the original
+seven relation arms (the two release arms share the same transformer theorem), while
 `resolution_yield_preserves_coreWF` covers restart/yield. Seven relation-facing
 `*StepOfWF` constructors plus `resolutionYieldWFState` now construct certified
-endpoints instead of requiring callers to invent their proofs.
+endpoints instead of requiring callers to invent their proofs. WP-B3 later adds
+the eighth endpoint constructor and preservation theorem.
 
 The target was:
 
@@ -107,15 +109,27 @@ variable.
 
 ## WP-B3 — Theorem 1: derive the payoffs, don't install them
 
+**Status:** completed with the pre-approved named finite certified-policy
+fallback. Under `ExactCanConvertAfterRoute`'s distinct-endpoint condition,
+`claimRoutePlan` certifies `routeState` as an actual balanced stock route;
+`ConversionReturnRel` is the conserving return leg; and
+`route_realizes_conversion` derives both private and whole value from
+final-minus-initial conversion counters. Exact execution uses
+`ExactCanConvertAfterRoute`, because rational Q can equal a natural conversion
+only when `q = κ·k`. Hoard is the certified identity run, release is an actual
+drain to reserve, and `FiniteCertifiedClaimPolicy` restricts optimization to
+those three claim-specific programs. The restriction is present in every source
+policy theorem name and in the paper-facing aliases' context types.
+
 The current kernel is correct and stays (it is the reviewed local theorem).
 The upgrade, per the Pro's targets:
 
 ```
 DependencyPath s i j     := Relation.TransGen (blockedOn s) i j
-routeState               : an ACTUAL transition — q moves i→j, state changes
+routeState               : raw stock update; with i≠j, q moves i→j
 CanConvertAfterRoute     : CanConvertQty (routeState s i j q) j q   -- post-route counterfactual
 RealizedOwn/WholeConversion : measured as final-minus-initial conversion totals over a real run
-route_realizes_conversion : Stranded → Path → CanConvertAfterRoute →
+route_realizes_conversion : Stranded → Path → ExactCanConvertAfterRoute →
                             ∃ t, RTC CoreRel (routeState …) t ∧ realized = q
 hoard_realizes_zero_conversion
 route_strictly_dominates_hoard          -- over realized quantities
@@ -123,18 +137,17 @@ selfish_optimum_contains_no_stranded_claim
 selfish_optima_eq_generous_optima       -- over the actual Policy type
 ```
 
-**The one deep design point — surface it in FINDINGS BEFORE implementing:**
-realized own-conversion for i along a TransGen path needs the return leg
-(j's conversion flowing back to i) to exist in the dynamics. If the current
-CureRel arms cannot express the return, extending them is allowed — but the
-extension must conserve `accounted` (prove it) and must not perturb
-`monotone_under_adversary`. Design note first, then code.
+**Resolved deep design point:** FINDINGS 38 records the obstruction before the
+implementation, and FINDINGS 39 records the landed transition. The fifth cure
+arm conserves `accounted`, preserves `CoreWF`, never increases any process's
+stock, and has a typed event, so blocked-stock monotonicity and the B1 commuting
+square remain intact.
 
-**Fallback (pre-decided):** if the unrestricted Policy quantifier resists,
-the reviewable fallback is Policy over a NAMED finite action grammar
-(compositions of route/hoard/release), restriction stated in the theorem
-name. What is not acceptable is the current state continuing to be
-described as the paper's Theorem 1.
+**Fallback taken explicitly:** unrestricted `Policy` also ranges over unrelated
+claims and inadmissible actions, so its universal optimum statement is false.
+The named `FiniteCertifiedClaimPolicy` grammar is the accepted claim-local
+surface; the older installed-payoff `ClaimChoice` kernel remains only as the
+reviewed local precursor.
 
 ## WP-R1 — Packaging + counts (immediate, parallel)
 

@@ -329,7 +329,7 @@
    honest per-node grow-only evidence by `max`; summing replica-local `value`s
    would double-count shared observations and is intentionally not a theorem.
 
-33. Theorem 1 landed at the finite-action-set level.
+33. The first Theorem 1 kernel landed at the installed finite-action-set level.
 
    `IsoConserve.TheoremOne.route_stranded_claim_strictly_dominates_hoard` proves
    the local strict theorem with the reviewed definitions: payoff is
@@ -338,19 +338,23 @@
    committed policy theorem is the fallback promised in `04i-theorem1-task.md`:
    `selfish_optima_eq_generous_optima` proves route is both selfishly and
    generously optimal inside `{hoard, route, release}` for the supplied claim.
-   The full unrestricted policy theorem remains review-gated rather than hidden
-   behind a broad quantifier. `DebtLedger` is a standalone mini-model with debt
-   conservation and return lemmas; it is not yet wired as a `CoreState` field.
+   At this initial stage, the full unrestricted policy theorem remained
+   review-gated rather than hidden behind a broad quantifier. `DebtLedger` is a
+   standalone mini-model with debt conservation and return lemmas; it is not yet
+   wired as a `CoreState` field. FINDINGS 38–39 record the later WP-B3 resolution:
+   values are derived from runs, the unrestricted legacy universe is rejected as
+   false, and these definitions remain only as the reviewed local precursor.
 
 34. PaperClaims now closes over the current proved module surface.
 
    `IsoConserve.PaperClaims` has been reconciled with the post-Review #7 modules
    instead of treated as a fresh file: its aliases now cover unified core trace,
    repaired L2, detector/progress, resolution yield, rate routing, PN-counter
-   distribution, flexibility collapse, polarity, invariants, and the finite-action
-   Theorem 1 surface. The headline `L2_monotonicity` is deliberately restricted to
-   blockedness-preserving core traces, while `unrestricted_l2_is_false` remains a
-   theorem-level warning against the old global reading. The audit helper now
+   distribution, flexibility collapse, polarity, invariants, and the dynamical
+   finite-policy Theorem 1 surface. The headline `L2_monotonicity` is deliberately
+   restricted to blockedness-preserving core traces, while
+   `unrestricted_l2_is_false` remains a theorem-level warning against the old
+   global reading. The audit helper now
    checks the headline `#print axioms` output against the exact allowed baseline
    `[propext, Classical.choice, Quot.sound]` and regenerates the coverage matrix
    from a single command.
@@ -380,9 +384,11 @@
 36. Core reachability and trace-derived L4 now form an exact commuting square.
 
    `CoreTrace.EventRel` has one constructor for each of the three `ExecRel` and
-   four `CureRel` arms. Work, drain, yield, and route events are projected from
-   their dependent plans; acquire and normal release retain their runnable/free
-   evidence; claim release mirrors the current unguarded relation exactly.
+   five `CureRel` arms. Work, drain, yield, route, and conversion-return events are
+   projected from their dependent plans; acquire and normal release retain their
+   runnable/free evidence; claim release mirrors the current unguarded relation
+   exactly. The fifth cure arm was added by WP-B3 after the original bridge and
+   was threaded through the same equivalence.
    `core_step_iff_has_event` and `core_reachable_iff_has_typed_trace` prove that
    certified events and `TypedRun`s neither widen nor narrow `CoreRel`.
 
@@ -421,8 +427,82 @@
    the existing `runnable` premise because acquiring sets a hold and runnable
    entails `done = false`; its lock-free guard remains operational evidence rather
    than a `CoreWF` premise. Seven `*StepOfWF` constructors and their relation
-   witnesses now produce the certified endpoints for all seven `CoreRel` arms.
+   witnesses now produce the certified endpoints for the original seven
+   `CoreRel` arms. WP-B3's later eighth arm has the same surface through
+   `wf_conversionReturnStep`, `conversionReturnStepOfWF`, and its relation witness.
    `ResolutionYield.resolution_yield_preserves_coreWF` separately covers the
    restart operation, including nonnegative banked credit, equal expanded budget
    and cap, reset restart progress, cleared locks, and conserved accounting;
    `resolutionYieldWFState` packages that endpoint.
+
+38. Dynamical Theorem 1 needs an explicit conversion-return leg and discrete exactness.
+
+   This design note precedes the WP-B3 implementation. The current route step moves
+   stock, and the current work step records conversion only at the physical worker;
+   no `CoreRel` arm makes conversion at a transitive dependency target available to
+   the original claimant. Counting a target's conversion as the claimant's payoff
+   by definition would merely reinstall the payoff. B3 will instead add a named
+   cure transition guarded by a directed `Relation.TransGen (blockedOn s)` witness:
+   it consumes stock at the reachable converter and increments the claimant's real
+   conversion counters, releasing the claimant's wait/holds as the return leg. The
+   transition must conserve `accounted`, preserve every `CoreWF` field, remain
+   non-increasing on blocked stock, and receive a typed event so the B1 commuting
+   square remains exact.
+
+   Exact realization also cannot follow from the old `CanConvertQty` alone. Claims
+   are rational Q while conversion counters are natural units costing `κ`; for
+   example `κ = 2, q = 3` satisfies `κ ≤ q` but cannot realize exactly `q`.
+   The executable post-route predicate will therefore carry `k > 0` and
+   `q = κ·k`, plus distinct endpoints and enough remaining claimant work. The
+   public payoff is then derived as `κ` times final-minus-initial conversion
+   totals, never stored in an `Outcome` field.
+
+   Finally, the unrestricted existing `Policy` quantifies over unrelated claims,
+   arbitrary rational amounts, and actions without admissibility or run evidence;
+   selfish and generous optima over that universe do not coincide. WP-B3 therefore
+   takes 04k's pre-approved fallback: a restriction-named finite certified claim
+   grammar whose hoard, route, and release programs compile respectively to an
+   identity run, an actual route plus conversion-return run, and an actual drain to
+   reserve. The PDF's conclusion is strict conversion dominance/obstruction, not
+   the expanded draft's stronger claim that every hoarder is globally `Deadlocked`;
+   the repaired theorem does not depend on the expanded draft's over-strong L2.
+
+39. Theorem 1 now derives its payoffs from certified core executions.
+
+   With `ExactCanConvertAfterRoute.endpoints_distinct`,
+   `TheoremOne.claimRoutePlan` certifies `routeState` as a balanced rational stock
+   move from claimant `i` to converter `j` and an actual `RouteRel` endpoint.
+   `DependencyPath` is the directed transitive closure of `blockedOn`; route
+   preserves that graph. `ExactCanConvertAfterRoute` adds the discrete facts the
+   old predicate could not imply: `k > 0`, `q = κ·k`, distinct endpoints, a live
+   beneficiary with enough remaining work, and genuine post-route convertibility
+   at `j`.
+
+   The new `CoreTrace.ConversionReturnRel` is the missing dynamic return leg. Its
+   plan carries the dependency path, consumes `κ·k` stock at runnable converter
+   `j`, increments only beneficiary `i`'s conversion counters, and clears `i`'s
+   wait and holds. `conversion_return_conservation` and
+   `wf_conversionReturnStep` prove accounting and all nine well-formedness fields;
+   `conversionReturnStep_stock_le` preserves the blocked-stock monotonicity proof.
+   `CureEvent.conversionReturn` keeps `EventRel ↔ CoreRel` and typed L4 traces
+   exact after the extension.
+
+   `route_realizes_conversion` is now the requested operational theorem: from the
+   routed endpoint it constructs a real `RTC CoreRel` return step whose
+   `RealizedOwnConversion` and `RealizedWholeConversion` are both exactly `q`.
+   `routeCertifiedOutcome` includes the preceding route, while the designated
+   hoard uses `RTC.refl` and release uses an actual `DrainRel`; their derived values
+   are zero. Thus `route_strictly_dominates_hoard` compares endpoint counter deltas,
+   not `Outcome.ownBenefit`.
+
+   The unrestricted legacy `Policy` claim is false for the reason recorded in
+   FINDINGS 38, so the accepted 04k fallback is explicit:
+   `FiniteCertifiedClaimPolicy` contains exactly the certified hoard,
+   route-and-return, and release programs. Their private/whole value table is
+   derived as `0/q/0`; `selfish_optimum_contains_no_stranded_claim_in_finite_certified_policies`
+   excludes hoard, and
+   `selfish_optima_eq_generous_optima_in_finite_certified_policies` proves equality
+   of the two optimum predicates for every policy in that named grammar. The
+   authoritative PDF conclusion is obstruction/strict dominance, not a global
+   `Deadlocked` conclusion, and no B3 proof consumes the expanded draft's
+   over-strong L2.

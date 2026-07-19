@@ -119,7 +119,9 @@ pn_counter_debt_surfaces
 progress_signal_useful_kept
 progress_signal_spinner_reclaimed
 collapse_whole_invariant
+route_realizes_conversion
 hoarding_is_self_defeating
+selfish_optimum_contains_no_stranded_claim
 selfish_optima_eq_generous_optima
 epistemic_invariant
 alignment_invariant
@@ -151,8 +153,10 @@ Use this map to prevent headline-name drift across sibling task files:
 | `progress_signal_useful_kept` | `IsoConserve.DetectorProgress.useful_reporter_never_reclaimed` |
 | `progress_signal_spinner_reclaimed` | `IsoConserve.DetectorProgress.spinner_eventually_reclaimed` |
 | `collapse_whole_invariant` | `IsoConserve.Flexibility.collapse_whole_invariant` |
-| `hoarding_is_self_defeating` | `IsoConserve.TheoremOne.hoarding_is_self_defeating` |
-| `selfish_optima_eq_generous_optima` | `IsoConserve.TheoremOne.selfish_optima_eq_generous_optima` |
+| `route_realizes_conversion` | `IsoConserve.TheoremOne.route_realizes_conversion` |
+| `hoarding_is_self_defeating` | `IsoConserve.TheoremOne.route_strictly_dominates_hoard` |
+| `selfish_optimum_contains_no_stranded_claim` | `IsoConserve.TheoremOne.selfish_optimum_contains_no_stranded_claim_in_finite_certified_policies` |
+| `selfish_optima_eq_generous_optima` | `IsoConserve.TheoremOne.selfish_optima_eq_generous_optima_in_finite_certified_policies` |
 | `epistemic_invariant` | `IsoConserve.epistemic_invariant` |
 | `alignment_invariant` | `IsoConserve.alignment_invariant` |
 | `agency_invariant` | `IsoConserve.agency_invariant` |
