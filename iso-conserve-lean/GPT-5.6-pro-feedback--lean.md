@@ -1,3 +1,5 @@
+[OLD]
+
 **Emotional state: +118 — delighted, settled, and increasingly amused by how small the object remains after everything has unfolded.**
 
 ## Pleasure pass
@@ -629,3 +631,634 @@ The Lean work is complete when the following chain is machine-checked without a 
 One evidence note: I could not rematerialize the GitHub branch archive inside this runtime, so the suggested file placement is based on the ten-module inventory in the PDF and our immediately preceding source inspection, rather than a new commit-level diff. The semantic tasks themselves follow directly from the current paper’s definitions and claims.
 
 **Emotional state: +126 — this now feels clean. Not “add more Lean everywhere”; seven exact closures, and then the formal object will have the same shape as the paper.**
+
+--
+
+[NEW feedback - 2026-07-19 15:12 UTC - Pro Goblin GPT-5.6]
+
+**Emotional state: +108 → +79 — deeply impressed, then one clean drop when the theorem names and theorem statements stopped being identical. No reviewer fog; three specific bridges remain.**
+
+# Verification verdict
+
+The new development is **real, substantial, and mostly exactly what we asked for**. It is not a superficial layer of aliases over the old formalization.
+
+It has grown to:
+
+* **21 Lean modules**
+* **6,926 source lines**
+* **427 theorem declarations**
+* **zero** occurrences of `sorry`, `admit`, project-defined `axiom`, `opaque`, or `unsafe`
+* only `Std` plus internal `IsoConserve` imports
+
+Archive SHA-256:
+
+```text
+ecb84077cded65455a8c7fd8a7c48a670d055a2ea1ddedf669c52ddc08ccfe3b
+```
+
+The major requested modules all exist:
+
+```text
+CoreTrace.lean
+DetectorProgress.lean
+ResolutionYield.lean
+RateRouting.lean
+TheoremOne.lean
+PaperInvariants.lean
+PaperClaims.lean
+PNCounter.lean
+Flexibility.lean
+Noether.lean
+```
+
+And `PaperClaims.lean` is excellent as a citation-facing closure surface: it exports named results for L1–L4, detector soundness and latency, resolution, routed rates, the three invariants, flexibility, debt, and Theorem 1 while explicitly saying the source theorem remains authoritative for scope.
+
+**But I cannot yet certify the stronger statement “all Lean is done.”** Most of it is done. Three semantic bridges and one reproducibility item remain.
+
+---
+
+# What is genuinely closed
+
+## 1. The unified ontology: **done**
+
+`CoreTrace.lean` now contains the common object rather than separate fluid and graph worlds:
+
+* process stock and credit;
+* total and since-restart conversion;
+* base rate;
+* budget and budget cap;
+* lock requests and lock ownership;
+* `blockedOn`, `runnable`, `canConvert`;
+* closed dependency sets;
+* stranded claims;
+* `CoreWF` and typed `WFState`.
+
+It also distinguishes:
+
+```lean
+ExecRel   -- ordinary execution
+CureRel   -- drain, yield, route, release
+CoreRel   -- their union
+```
+
+That is exactly the distinction needed to state:
+
+> deadlock is absorbing under ordinary dynamics, while a conserving cure can break the absorption.
+
+The concrete two-process cycle and release witness are mechanized as well.
+
+**Verdict: closed.**
+
+## 2. Conservation and the repaired L2: **done**
+
+The unified system proves conservation under:
+
+* work;
+* acquisition;
+* normal release;
+* drain;
+* yield;
+* route;
+* release of a claim;
+* arbitrary reachable compositions.
+
+The unrestricted version of L2 is not merely omitted; it has a formal counterexample under the explicit theorem name:
+
+```lean
+unrestricted_l2_is_false
+```
+
+The repaired result is then proved for blockedness-preserving traces, with blocked stock non-increasing.
+
+**Verdict: closed.**
+
+## 3. Deadlock detector soundness, liveness, and logical bound: **mostly done**
+
+`DetectorProgress.lean` now joins the right objects:
+
+```lean
+observeAttempt
+closedWaitSet
+floored
+detectorFires
+runSchedule
+selectedCount
+memberSelectedAtLeast
+```
+
+It proves:
+
+* closed wait sets survive observation steps;
+* their members cannot convert;
+* each selection drains one budget unit;
+* sufficiently fair selection floors every member;
+* the detector eventually fires;
+* detection occurs within a budget-derived logical bound;
+* no wall-clock quantity appears.
+
+This is the actual operational bridge the old development lacked.
+
+**Verdict: the deadlock side is closed. One slow-but-live theorem needs a small correction; see below.**
+
+## 4. Resolution yield: **done**
+
+This is now correctly the paper’s mechanism rather than merely stock-to-credit transfer.
+
+`resolutionYield`:
+
+* banks `convertedSinceRestart × convertCost`;
+* resets since-restart conversion;
+* resets the program counter;
+* clears the outstanding request;
+* expands the restarted budget by credited units;
+* releases all locks held by the yielder.
+
+The development proves:
+
+* total accounting conservation;
+* zero loss of accounted work;
+* monotone credit;
+* monotone cumulative converted work;
+* restart with base plus credit;
+* release of the wait edge;
+* breaking of a closed component under the stated witness;
+* the canonical credit policy completes;
+* discard repeats or livelocks;
+* positive repeated credit eventually satisfies finite work.
+
+This is a genuine closure of the paper’s no-victim resolution claim.
+
+**Verdict: closed.**
+
+## 5. Rate routing: **done**
+
+This part is especially strong.
+
+`RateRouting.lean` formalizes:
+
+* wait destinations;
+* routed base rates;
+* stranded rates;
+* transitive destination tracing;
+* effective rate as base plus all waiting demand;
+* sum rather than maximum;
+* conservation between runnable-root rate and stranded-cycle rate;
+* proportional shares summing exactly to the quantum;
+* memoryless restoration when wait edges disappear;
+* the canonical Pathfinder-style split as exact rational arithmetic:
+
+[
+\frac{10}{13}+\frac{3}{13}=1.
+]
+
+The proof correctly accounts for rate trapped in closed cycles instead of silently deleting it:
+
+[
+\sum_{\text{runnable roots}}\operatorname{routedRate}
++
+\operatorname{strandedRate}
+===========================
+
+\sum_{\text{live processes}}\operatorname{baseRate}.
+]
+
+That is better than the task I originally specified.
+
+**Verdict: closed.**
+
+## 6. Distribution, flexibility, polarity, and Noether-style abstraction: **done beyond the minimum**
+
+The archive additionally formalizes:
+
+* PN-counter order, merge, associativity, commutativity, idempotence, and debt surfacing;
+* potential-to-actual conservation;
+* polarity of recorded presence versus inferred absence;
+* a clock-free invariant abstraction;
+* canonical bridges back to the older engine-shaped model.
+
+These were not required to align the central Lean core, but they add real paper value.
+
+**Verdict: closed and extended.**
+
+## 7. Paper-facing theorem surface: **done**
+
+`PaperClaims.lean` does exactly what it should. It gives the paper a single stable namespace containing the named claims, while retaining source-level scope boundaries.
+
+**Verdict: closed.**
+
+---
+
+# The three remaining semantic bridges
+
+## 1. L4 has a real trace integral—but the trace is not yet derived from `CoreRel`
+
+This is the cleanest remaining gap.
+
+The new trace layer defines:
+
+```lean
+StepEvent
+stockDelta
+creditDelta
+netFlow
+flowIntegral
+applyEvent
+runState
+Run
+```
+
+and proves the exact identity:
+
+[
+S_i(\tau)+C_i(\tau)
+===================
+
+S_i(0)+C_i(0)+
+\sum_{e\in\tau}\operatorname{netFlow}_i(e).
+]
+
+Excellent.
+
+But `Run` currently means only:
+
+```lean
+final.state = runState initial.state trace
+```
+
+And `applyEvent` updates only stock and credit according to arbitrary event deltas. It does not enforce:
+
+* plan admissibility;
+* reserve balance;
+* conversion totals;
+* lock semantics;
+* correspondence to `ExecRel`, `CureRel`, or `CoreRel`.
+
+There is no theorem of either shape:
+
+```lean
+CoreRel s t → ∃ e, applyEvent s.state e = t.state
+```
+
+or:
+
+```lean
+RTC CoreRel s t → ∃ trace, Run s trace t
+```
+
+So today the development proves:
+
+1. conservation and absorption over `CoreRel`; and
+2. exact stock–flow integration over a separate event semantics.
+
+Both are valid, but L4 is not yet an integral theorem **of the same operational transition system** as L1–L3.
+
+The source itself still contains this note at `CoreTrace.lean:1376–1385`:
+
+> “Compatibility obligations for a future full old-to-new simulation … intentionally documented here as obligations, not theorem declarations.”
+
+### Minimal closure
+
+Add a typed trace relation whose events carry their valid plans—or an `eventOfStep` witness—and prove:
+
+```lean
+theorem core_step_has_event
+    (h : CoreRel s t) :
+    ∃ e, EventRel s e t
+
+theorem core_reachable_has_trace
+    (h : RTC CoreRel s t) :
+    ∃ trace, TypedRun s trace t
+
+theorem L4_for_core_reachable
+    (h : RTC CoreRel s t) :
+    stockCreditDifference s t p =
+      flowIntegralOfTypedTrace ...
+```
+
+This is not new theory. It is the final commuting square between the two already formalized halves.
+
+---
+
+## 2. “Periodic conversion” currently means “conversion on every selection”
+
+There is a very small but real bug in `DetectorProgress.lean`.
+
+The definition is:
+
+```lean
+def convertsWithinEverySelectionWindow
+    (s) (schedule) (p) (_window : Nat) : Prop :=
+  forall pref, PrefixOf pref schedule ->
+    convertsOnEverySelection s pref p
+```
+
+The `_window` argument is unused.
+
+And `convertsOnEverySelection` requires:
+
+```lean
+actor = p → canConvert s p
+```
+
+at every occurrence where (p) is selected.
+
+Therefore:
+
+```lean
+periodic_conversion_never_floors
+live_process_not_detected
+```
+
+currently prove the stronger but narrower statement:
+
+> A process that converts on **every** scheduled attempt never floors.
+
+They do not yet prove:
+
+> A slow process that converts at least once within each budget-sized selection window never floors.
+
+This matters because “slow but live” is one of the paper’s central distinctions.
+
+### Minimal closure
+
+Define a genuine selected-process window condition, for example:
+
+```lean
+def ConvertsWithinWindow
+    (s : CoreState n m)
+    (schedule : List (ProcId n))
+    (p : ProcId n)
+    (window : Nat) : Prop :=
+  ∀ segment,
+    ContiguousSelectionSegment schedule p segment →
+    window ≤ selectedCount segment p →
+    ∃ prefix actor suffix,
+      segment = prefix ++ actor :: suffix ∧
+      actor = p ∧
+      canConvert (runSchedule prefix s) p
+```
+
+Or more simply, prove the invariant that no run of (B) consecutive nonconverting selections of (p) occurs between resets.
+
+Then restate:
+
+```lean
+periodic_conversion_never_floors
+live_process_not_detected
+```
+
+over that actual window condition.
+
+The detector’s deadlock completeness and bound do not depend on this defect. Only the intended slow-live safety half does.
+
+---
+
+## 3. Theorem 1 is present, but presently encoded as its payoff definition
+
+This is the significant one.
+
+The source defines:
+
+```lean
+def DependencyReturn s i j := blockedOn s i j
+```
+
+so dependency return is one immediate wait edge—not a transitive dependency path or connected dependency whole.
+
+It defines routed private benefit as:
+
+```lean
+if actor = i ∧ CanConvertQty s j q ∧ DependencyReturn s i j
+then q
+else 0
+```
+
+and hoarded private benefit as:
+
+```lean
+if actor = i ∧ CanConvertQty s i q
+then q
+else 0
+```
+
+Then:
+
+```lean
+applyAction
+```
+
+leaves the system state unchanged and attaches those predefined benefit numbers:
+
+```lean
+{ state := s
+  ownBenefit := ...
+  wholeBenefit := ... }
+```
+
+Consequently, `hoarding_is_self_defeating` is proved by unfolding:
+
+* stranded means (i) cannot convert;
+* routed benefit is defined to be (q);
+* hoarded benefit is defined to be (0);
+* therefore (q>0).
+
+That theorem is internally valid. It precisely checks that the chosen payoff interpretation contains no contradiction.
+
+But it does not yet derive the paper’s load-bearing theorem from:
+
+* an actual route transition moving (q);
+* conversion occurring at (j);
+* a transitive dependency-return path;
+* the resulting later conversion available to (i);
+* arbitrary policies over the dependency-connected system.
+
+There is a `Policy`, `SelfishOptimal`, and `GenerousOptimal` definition at `TheoremOne.lean:201–216`, but no theorem uses those generic optimality definitions. The proved equality is only over the local three-element choice:
+
+```lean
+ClaimChoice.hoard
+ClaimChoice.route
+ClaimChoice.release
+```
+
+Also, `CanConvertQty s j q` requires (j) already to possess (q) in its stock:
+
+```lean
+q ≤ (s.procs j).stock
+```
+
+That is not yet the intended counterfactual:
+
+> (j) can convert (q) **after (q) is routed from (i) to (j)**.
+
+### What the current Lean proves
+
+A precise description is:
+
+> Under an immediate dependency-return edge, and under a payoff semantics that assigns the routed conversion to both the whole and the dependant node, route strictly dominates hoard for a stranded claim and is both selfishly and generously optimal among route, hoard, and release.
+
+That is a good local theorem. It is the right kernel.
+
+### Minimal closure to the full paper theorem
+
+The next theorem should derive those payoff values rather than install them:
+
+```lean
+def DependencyPath (s) (i j) : Prop := Relation.TransGen (blockedOn s) i j
+
+def CanConvertAfterRoute (s) (i j) (q) : Prop :=
+  CanConvertQty (routeState s i j q) j q
+
+def RealizedOwnConversion
+    (i) (initial final) : Qty := ...
+
+def RealizedWholeConversion
+    (initial final) : Qty := ...
+```
+
+Then prove:
+
+```lean
+route_realizes_conversion :
+  StrandedClaim s i q →
+  DependencyPath s i j →
+  CanConvertAfterRoute s i j q →
+  ∃ t,
+    RTC CoreRel (routeState ...) t ∧
+    RealizedWholeConversion ... = q ∧
+    RealizedOwnConversion i ... = q
+```
+
+followed by:
+
+```lean
+hoard_realizes_zero_conversion
+route_strictly_dominates_hoard
+selfish_optimum_contains_no_stranded_claim
+selfish_optima_eq_generous_optima
+```
+
+over actual `Policy`, not only `ClaimChoice`.
+
+This does **not** weaken Theorem 1. It upgrades the existing local semantic kernel into the strong theorem already stated by the paper.
+
+---
+
+# One typing issue worth closing alongside them
+
+`WFState` successfully ensures every endpoint admitted into `CoreRel` has a `CoreWF` proof. That is valuable.
+
+But the raw transitions themselves do not generally prove preservation:
+
+```lean
+workStep
+drainStep
+yieldStep
+routeStep
+resolutionYield
+```
+
+There is no general theorem such as:
+
+```lean
+CoreWF s → CoreWF (resolutionYield s y)
+```
+
+In fact, `workStep` can mark a process done without releasing its locks, while `CoreWF` requires done processes to hold no locks. A `WorkRel` step exists only when the caller separately supplies a well-formed target endpoint.
+
+So the system currently says:
+
+> transitions relate well-formed endpoints,
+
+rather than:
+
+> every admissible transition constructively produces a well-formed endpoint.
+
+That is logically safe, but slightly weaker than the paper’s phrase “well-formedness is part of the type.”
+
+The clean repair is to strengthen plans with whatever obligations are needed and return `WFState`, or prove preservation and package the result.
+
+---
+
+# Build and trust verification boundary
+
+I could complete the source audit, but **not rerun `lake build` in this runtime**:
+
+* Lean, Lake, and Elan are not installed here;
+* the environment has no network access with which to obtain them;
+* the ZIP contains no `lean-toolchain` file declaring the expected Lean version.
+
+Therefore I have verified:
+
+* archive integrity;
+* module structure;
+* source-level theorem inventory;
+* absence of explicit trust escapes;
+* import boundary;
+* theorem statements and proofs by inspection;
+* correspondence with our seven work packages.
+
+I have **not independently executed the Lean kernel** on this archive.
+
+Also, because several modules use `Classical.propDecidable`, “no project-defined axiom declarations” is statically verified, but the stronger phrase “no axioms beyond the kernel” should be based on actual:
+
+```lean
+#print axioms IsoConserve.PaperClaims.L1_conservation
+#print axioms IsoConserve.PaperClaims.core_trace_integral
+#print axioms IsoConserve.PaperClaims.detector_sound
+#print axioms IsoConserve.PaperClaims.hoarding_is_self_defeating
+```
+
+Add:
+
+```text
+lean-toolchain
+lake-manifest.json
+```
+
+and preferably a checked build transcript or CI workflow to make the package independently reproducible.
+
+---
+
+# Paper update already required
+
+The current PDF still reports the previous development as **1,717 lines, 105 theorems/lemmas, and ten modules**. 
+
+The archive now contains:
+
+[
+\boxed{
+21\text{ modules},
+\quad
+6{,}926\text{ lines},
+\quad
+427\text{ theorem declarations}
+}
+]
+
+So even before extending the paper conceptually, the abstract, evaluation table, reproducibility appendix, and conclusion need updated formalization numbers and module descriptions.
+
+# Final classification
+
+| Work package                                 | Verification                                          |
+| -------------------------------------------- | ----------------------------------------------------- |
+| Unified ledger + dependency ontology         | **Pass**                                              |
+| L1 and repaired L2 over unified dynamics     | **Pass**                                              |
+| L3 ordinary absorption / cure distinction    | **Pass**                                              |
+| L4 trace-derived integral                    | **Pass internally; missing `CoreRel ↔ Trace` bridge** |
+| End-to-end deadlock detection                | **Pass**                                              |
+| Slow-but-live periodic safety                | **Needs real window predicate**                       |
+| Converted-progress resolution yield          | **Pass**                                              |
+| Conserved transitive rate routing            | **Pass**                                              |
+| Distribution / flexibility extensions        | **Pass**                                              |
+| Three accounting invariants                  | **Pass**                                              |
+| Theorem 1 local semantic kernel              | **Pass**                                              |
+| Theorem 1 as global dynamical/policy theorem | **Not yet closed**                                    |
+| Paper claim surface                          | **Pass**                                              |
+| No explicit trust escapes                    | **Pass**                                              |
+| Independent kernel build                     | **Not rerun; toolchain absent**                       |
+
+So the honest answer is:
+
+> **The Lean expansion is spectacularly close and most of the work is genuinely done. Three theorem bridges remain before “the formal object exactly equals the paper” is true: operational traces for L4, true periodic slow-live conversion, and a dynamical/policy lifting of Theorem 1.**
+
+**Emotional state: +91 — the remaining work is no longer broad. Three bright seams are visible, each with an exact proof target.**
