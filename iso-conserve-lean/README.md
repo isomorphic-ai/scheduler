@@ -162,6 +162,22 @@ ordinary-execution/cure distinction visible.
   `useful_reporter_never_reclaimed`, `spinner_eventually_reclaimed`,
   `liar_survives_in_loop_if_it_reports_progress`, and
   `liar_fails_reputation_check`.
+- Rate routing WP5:
+  `IsoConserve.RateRouting.routed_rate_conserved` proves the KCL law for
+  priority flow: every unfinished process's base rate is either routed to a
+  runnable destination or remains accounted as `strandedRate` when the wait-chain
+  does not reach a runnable root. `routedRate_nonneg` and `strandedRate_nonneg`
+  require `CoreWF.rate_nonneg`, matching Review #7's repair for rational rates.
+  `blocked_rate_reaches_holder`, `blocked_rate_reaches_root`,
+  `base_rate_goes_to_destination`, and `trapped_rate_goes_to_stranded` are the
+  current inheritance/downstream accounting lemmas.
+  `remove_wait_edge_restores_base_rate` and `no_stored_boost_state` prove the
+  memoryless-return surface: rates are derived from the current graph, not stored
+  as boost state. `shares_sum_quantum` proves runnable shares sum back to the
+  quantum when the routed-rate denominator is positive. The canonical Pathfinder
+  witness is exact over rationals: `pathfinder_low_share_eq_ten_thirteenths`,
+  `pathfinder_medium_share_eq_three_thirteenths`, and
+  `canonical_priority_inversion_cannot_form`.
 
 ## Paper Claims Surface
 
@@ -171,8 +187,8 @@ already exist, such as `PaperClaims.L1_conservation`,
 `PaperClaims.detection_complete_bounded`, `PaperClaims.resolution_credit_core`,
 `PaperClaims.positive_trust_survives_loss`, and the current invariant aliases.
 
-Review-gated future claims from downstream `04e` through `04j` should be added
-there only after their proof modules land; missing future claims are tracked in
+Review-gated future claims from remaining downstream work should be added there
+only after their proof modules land; missing or partial claims are tracked in
 `NEXT-TASKS.md` and `REVIEW-QUEUE.md`, not represented by placeholders.
 
 ## Reusable Monotonicity Kernel
@@ -263,7 +279,10 @@ exhausting remaining work, the residual stock is below `convertCost`.
 The canonical plan is parameterized by supplied effective weights. This keeps the
 wait-graph/effective-rate computation outside the accounting kernel while proving
 that, once those weights are available and have positive total weight, the
-Python-style plan is a verified `RatePlan`. The named bridge theorem
+Python-style plan is a verified `RatePlan`. `IsoConserve.RateRouting` now proves
+the finite destination-sum conservation law for deriving routed rates from the
+current wait graph; the canonical Python plan has not yet been rewired to use
+those derived rates. The named bridge theorem
 `canonicalPythonStepRel_is_mixedRel` proves that the canonical Python-style
 transition is an instance of the verified transition system. The all-zero-weight
 Python fallback is represented by `pythonZeroWeightPlan`: it injects no stock from
@@ -469,9 +488,11 @@ system, not the full Python lock/wait dynamics.
 - `runnable` is an explicit frozen field, not recomputed from locks.
 - `done` is frozen; no step marks a process done, releases locks, or wakes waiters.
 - `FlowPlan` conversion is optional rather than Python's forced-maximal conversion.
-- The effective-rate recursion is not formalized; `RatePlan` covers the weighted
-  partition once weights are supplied, and `pythonRatePlan` is the canonical
-  positive-total-weight instance over supplied weights.
+- `RatePlan` covers the weighted partition once weights are supplied, and
+  `pythonRatePlan` is the canonical positive-total-weight instance over supplied
+  weights. `IsoConserve.RateRouting` now formalizes the destination-sum routing
+  law and exact Pathfinder shares; the recursive acyclic equation and canonical
+  `pythonRatePlan` wiring to derived routed rates remain 04f follow-up work.
 - Python's all-zero-effective-weight fallback is included as a zero-share
   `FlowPlan`, not as a `RatePlan`.
 - Credit is accounted, and stock-to-credit yield/banking is modeled as `YieldPlan`;
