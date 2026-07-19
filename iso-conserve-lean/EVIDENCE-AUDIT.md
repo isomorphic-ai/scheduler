@@ -1,8 +1,8 @@
 # Lean Evidence Audit
 
-- Git HEAD: `7111c0f`
+- Git HEAD: `04959a8`
 - Report note: this records the tree at the Git HEAD above; rerun `tools/lean-evidence-audit` for the current HEAD.
-- Worktree dirty at audit run: `yes`
+- Worktree dirty at audit run: `no`
 - Build: `PASS`
 - Sorry/admit/axiom scan: `PASS`
 - Headline `#print axioms`: `PASS`
