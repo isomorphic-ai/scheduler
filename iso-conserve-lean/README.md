@@ -66,6 +66,13 @@ use `WFState`, with ordinary execution separated from cure steps as `ExecRel`,
 implicitly release locks; release is an explicit event, which keeps the L3
 ordinary-execution/cure distinction visible.
 
+The trace layer is operationally typed. `EventRel` retains the dependent plan and
+admissibility evidence for each `CoreRel` arm, while `TypedRun` chains those events
+in the same snoc order as `RTC`. `core_step_iff_has_event` and
+`core_reachable_iff_has_typed_trace` prove the two presentations are exact. The
+homogeneous `StepEvent` list is only the accounting projection used by
+`flowIntegral`; no arbitrary-delta state interpreter remains.
+
 ## Paper Law Map
 
 - L1 conservation: `IsoConserve.L1_conservation`
@@ -154,7 +161,10 @@ ordinary-execution/cure distinction visible.
   `CoreTrace.stock_credit_eq_initial_add_integral`,
   `CoreTrace.L4_stock_is_trace_integral`, and
   `CoreTrace.cached_integral_eq_trace_integral` provide the trace-derived L4
-  surface via `flowIntegral`.
+  surface via `flowIntegral`. `CoreTrace.core_step_has_event` and
+  `core_reachable_has_trace` construct the certified operational history, while
+  `CoreTrace.L4_for_core_reachable` proves every `RTC CoreRel` execution has such
+  a trace and that its integral is the final-minus-initial stock plus credit.
 - Unified detector/progress WP3:
   `IsoConserve.DetectorProgress.conversion_refills_budget`,
   `blocked_nonconversion_drains_budget`, `budget_drop_implies_blocked`, and
@@ -164,7 +174,7 @@ ordinary-execution/cure distinction visible.
   closed and floored component is a genuine deadlock witness.
   `periodic_conversion_never_floors` and `live_process_not_detected` prove the
   slow-live safety direction for schedule prefixes when the process starts at
-  full budget and converts on each selected attempt.
+  full budget and converts within each budget-sized selected-attempt window.
   `closed_deadlock_eventually_floors`, `deadlock_eventually_detected`, and
   `detection_latency_le_budget` prove bounded detection by per-member selection
   counts. The `SIG_PROGRESS` submodel is covered by
@@ -228,7 +238,8 @@ ordinary-execution/cure distinction visible.
 proved surface. It contains only aliases or thin corollaries whose source theorems
 already exist. The current surface includes the core aliases
 `PaperClaims.core_conservation`, repaired `PaperClaims.L2_monotonicity`,
-`PaperClaims.core_deadlock_exec_fixed`, and `PaperClaims.core_trace_integral`;
+`PaperClaims.core_deadlock_exec_fixed`, `PaperClaims.core_trace_integral`, and
+`PaperClaims.L4_for_core_reachable`;
 detector/progress aliases such as `PaperClaims.detector_sound`,
 `PaperClaims.detection_latency_le_budget`, `PaperClaims.live_process_not_detected`,
 `PaperClaims.progress_signal_useful_kept`, and

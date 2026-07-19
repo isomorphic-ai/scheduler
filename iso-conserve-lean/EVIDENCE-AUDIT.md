@@ -1,15 +1,15 @@
 # Lean Evidence Audit
 
-- Git HEAD: `b590a76`
+- Git HEAD: `7111c0f`
 - Report note: this records the tree at the Git HEAD above; rerun `tools/lean-evidence-audit` for the current HEAD.
-- Worktree dirty at audit run: `no`
+- Worktree dirty at audit run: `yes`
 - Build: `PASS`
 - Sorry/admit/axiom scan: `PASS`
 - Headline `#print axioms`: `PASS`
 - Allowed axiom baseline: `[propext, Classical.choice, Quot.sound]` and subsets only
 - Lean modules: `21`
-- Source lines under `IsoConserve/`: `7135`
-- Syntactic theorem/lemma declarations: `434`
+- Source lines under `IsoConserve/`: `7311`
+- Syntactic theorem/lemma declarations: `443`
 - Declaration-counting rule: count source lines under `IsoConserve/` whose first non-whitespace token is `theorem` or `lemma`; the 431 snapshot included four `: True` compatibility placeholders later demoted at `2a29078`, while the 427 Pro snapshot did not.
 - Review #9 headline-name note: all four requested exports exist unchanged as `PaperClaims.L1_conservation`, `PaperClaims.core_trace_integral`, `PaperClaims.detector_sound`, and `PaperClaims.hoarding_is_self_defeating`; no rename mapping is needed.
 
@@ -18,8 +18,8 @@
 | Metric | Generated count |
 |---|---:|
 | Lean modules under `IsoConserve/` | 21 |
-| Source lines under `IsoConserve/` | 7135 |
-| Syntactic `theorem`/`lemma` declarations | 434 |
+| Source lines under `IsoConserve/` | 7311 |
+| Syntactic `theorem`/`lemma` declarations | 443 |
 
 ## Build Log
 
@@ -72,8 +72,14 @@ No matches under `IsoConserve/`.
 'IsoConserve.CoreTrace.closed_wait_set_converted_total_fixed' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.CoreTrace.cure_preserves_accounted' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.CoreTrace.cure_can_break_absorption' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.core_step_has_event' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.core_step_iff_has_event' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.core_reachable_has_trace' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.core_reachable_iff_has_typed_trace' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.CoreTrace.stock_credit_eq_initial_add_integral' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.CoreTrace.L4_stock_is_trace_integral' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.L4_for_core_reachable' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.L4_zero_initial_for_core_reachable' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.CoreTrace.unrestricted_l2_is_false' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.DetectorProgress.detector_sound' does not depend on any axioms
 'IsoConserve.DetectorProgress.periodic_conversion_never_floors' depends on axioms: [propext,
@@ -140,6 +146,7 @@ No matches under `IsoConserve/`.
 'IsoConserve.PaperClaims.core_closed_wait_set_absorbing' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.PaperClaims.L3_wait_component_absorption' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.PaperClaims.L4_stock_integral' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.L4_for_core_reachable' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.PaperClaims.detection_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.PaperClaims.detection_complete_bounded' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.PaperClaims.detection_latency_le_budget' depends on axioms: [propext, Classical.choice, Quot.sound]
@@ -220,7 +227,7 @@ IsoConserve/WaitGraph.lean
 | L1 conservation | `IsoConserve.L1_conservation`, reachable accounting corollaries | proved | plan-abstracted kernel |
 | L2 monotonicity | `IsoConserve.blocked_stock_monotone`, `IsoConserve.L2_drain_monotone` | proved | repaired blocked/drain scope |
 | L3 absorption | `IsoConserve.L3_absorbing`, `IsoConserve.WaitGraph.L3_waitComponent_absorbing_iter` | proved | old kernel plus supplied closed wait component |
-| L4 stock/integral | `IsoConserve.L4_stock_is_integral`, `IsoConserve.l4_reachable`, `IsoConserve.CoreTrace.L4_stock_is_trace_integral` | proved | old kernel uses cached field; CoreTrace is trace-derived |
+| L4 stock/integral | `IsoConserve.L4_stock_is_integral`, `IsoConserve.CoreTrace.L4_stock_is_trace_integral`, `IsoConserve.CoreTrace.L4_for_core_reachable` | proved | old kernel uses cached field; CoreTrace derives one certified operational trace for every reachable execution |
 | Detection bounded completeness | `IsoConserve.BudgetWait.closed_wait_set_detected_within_budget` | proved | supplied closed component/window evidence |
 | Detection soundness with evidence | `IsoConserve.BudgetWait.detection_sound_with_budget_evidence` | proved | supplied closed component |
 | Resolution credit core | `IsoConserve.credit_monotone_under_yield_reachable` | proved | stock-to-credit core, not full restart yield |
@@ -230,7 +237,7 @@ IsoConserve/WaitGraph.lean
 | Flexibility collapse | `IsoConserve.Flexibility.collapse_whole_invariant` | proved | conservation identity only |
 | Noether slice | `IsoConserve.Noether.mixedRel_accounted_clockFree` | proved | uniqueness obstructed |
 | PaperClaims closure surface | `IsoConserve.PaperClaims.*` aliases for core trace, detector, resolution, routing, PN-counter, flexibility, Theorem 1, polarity, invariants | proved | theorem names are citation aliases; source modules define exact scope |
-| Unified core trace | `IsoConserve.CoreTrace.core_reachable_conserves_accounted`, `IsoConserve.CoreTrace.deadlock_exec_fixed`, `IsoConserve.CoreTrace.L4_stock_is_trace_integral` | proved | shared surface; full old-to-new simulation not proved |
+| Unified core trace | `IsoConserve.CoreTrace.core_reachable_conserves_accounted`, `IsoConserve.CoreTrace.core_reachable_iff_has_typed_trace`, `IsoConserve.CoreTrace.L4_for_core_reachable` | proved | `TypedRun` is exactly `RTC CoreRel`; separate full old-to-new simulations remain unproved |
 | Rate routing | `IsoConserve.RateRouting.routed_rate_conserved`, `IsoConserve.RateRouting.effective_rate_eq_base_plus_waiters`, `IsoConserve.RateRouting.multiple_waiters_sum_not_max`, `IsoConserve.RateRouting.pathfinder_low_share_eq_ten_thirteenths`, `IsoConserve.RateRouting.no_stored_boost_state`, `IsoConserve.canonical_step_uses_derived_routed_rates` | proved | destination-sum KCL, partition-certified recursive equation, sum-not-max, exact shares, memoryless return, and derived-rate canonical bridge |
 | PN-counter distribution | `IsoConserve.PNCounter.merge_assoc`, `IsoConserve.PNCounter.eval_eq_globalRecorded`, `IsoConserve.PNCounter.off_partition_decrement_surfaces` | proved | honest per-node ledgers by max; no CAP/gossip/Byzantine theorem |
 | Detector/progress signal | `IsoConserve.DetectorProgress.detector_sound`, `IsoConserve.DetectorProgress.detection_latency_le_budget`, `IsoConserve.DetectorProgress.live_process_not_detected`, `IsoConserve.DetectorProgress.liar_fails_reputation_check` | proved | supplied component; selected-attempt schedule; honest signal plus reputation |

@@ -88,8 +88,14 @@ headline_theorems=(
   IsoConserve.CoreTrace.closed_wait_set_converted_total_fixed
   IsoConserve.CoreTrace.cure_preserves_accounted
   IsoConserve.CoreTrace.cure_can_break_absorption
+  IsoConserve.CoreTrace.core_step_has_event
+  IsoConserve.CoreTrace.core_step_iff_has_event
+  IsoConserve.CoreTrace.core_reachable_has_trace
+  IsoConserve.CoreTrace.core_reachable_iff_has_typed_trace
   IsoConserve.CoreTrace.stock_credit_eq_initial_add_integral
   IsoConserve.CoreTrace.L4_stock_is_trace_integral
+  IsoConserve.CoreTrace.L4_for_core_reachable
+  IsoConserve.CoreTrace.L4_zero_initial_for_core_reachable
   IsoConserve.CoreTrace.unrestricted_l2_is_false
   IsoConserve.DetectorProgress.detector_sound
   IsoConserve.DetectorProgress.periodic_conversion_never_floors
@@ -140,6 +146,7 @@ headline_theorems=(
   IsoConserve.PaperClaims.core_closed_wait_set_absorbing
   IsoConserve.PaperClaims.L3_wait_component_absorption
   IsoConserve.PaperClaims.L4_stock_integral
+  IsoConserve.PaperClaims.L4_for_core_reachable
   IsoConserve.PaperClaims.detection_sound
   IsoConserve.PaperClaims.detection_complete_bounded
   IsoConserve.PaperClaims.detection_latency_le_budget
@@ -293,7 +300,7 @@ fi
 | L1 conservation | `IsoConserve.L1_conservation`, reachable accounting corollaries | proved | plan-abstracted kernel |
 | L2 monotonicity | `IsoConserve.blocked_stock_monotone`, `IsoConserve.L2_drain_monotone` | proved | repaired blocked/drain scope |
 | L3 absorption | `IsoConserve.L3_absorbing`, `IsoConserve.WaitGraph.L3_waitComponent_absorbing_iter` | proved | old kernel plus supplied closed wait component |
-| L4 stock/integral | `IsoConserve.L4_stock_is_integral`, `IsoConserve.l4_reachable`, `IsoConserve.CoreTrace.L4_stock_is_trace_integral` | proved | old kernel uses cached field; CoreTrace is trace-derived |
+| L4 stock/integral | `IsoConserve.L4_stock_is_integral`, `IsoConserve.CoreTrace.L4_stock_is_trace_integral`, `IsoConserve.CoreTrace.L4_for_core_reachable` | proved | old kernel uses cached field; CoreTrace derives one certified operational trace for every reachable execution |
 | Detection bounded completeness | `IsoConserve.BudgetWait.closed_wait_set_detected_within_budget` | proved | supplied closed component/window evidence |
 | Detection soundness with evidence | `IsoConserve.BudgetWait.detection_sound_with_budget_evidence` | proved | supplied closed component |
 | Resolution credit core | `IsoConserve.credit_monotone_under_yield_reachable` | proved | stock-to-credit core, not full restart yield |
@@ -303,7 +310,7 @@ fi
 | Flexibility collapse | `IsoConserve.Flexibility.collapse_whole_invariant` | proved | conservation identity only |
 | Noether slice | `IsoConserve.Noether.mixedRel_accounted_clockFree` | proved | uniqueness obstructed |
 | PaperClaims closure surface | `IsoConserve.PaperClaims.*` aliases for core trace, detector, resolution, routing, PN-counter, flexibility, Theorem 1, polarity, invariants | proved | theorem names are citation aliases; source modules define exact scope |
-| Unified core trace | `IsoConserve.CoreTrace.core_reachable_conserves_accounted`, `IsoConserve.CoreTrace.deadlock_exec_fixed`, `IsoConserve.CoreTrace.L4_stock_is_trace_integral` | proved | shared surface; full old-to-new simulation not proved |
+| Unified core trace | `IsoConserve.CoreTrace.core_reachable_conserves_accounted`, `IsoConserve.CoreTrace.core_reachable_iff_has_typed_trace`, `IsoConserve.CoreTrace.L4_for_core_reachable` | proved | `TypedRun` is exactly `RTC CoreRel`; separate full old-to-new simulations remain unproved |
 | Rate routing | `IsoConserve.RateRouting.routed_rate_conserved`, `IsoConserve.RateRouting.effective_rate_eq_base_plus_waiters`, `IsoConserve.RateRouting.multiple_waiters_sum_not_max`, `IsoConserve.RateRouting.pathfinder_low_share_eq_ten_thirteenths`, `IsoConserve.RateRouting.no_stored_boost_state`, `IsoConserve.canonical_step_uses_derived_routed_rates` | proved | destination-sum KCL, partition-certified recursive equation, sum-not-max, exact shares, memoryless return, and derived-rate canonical bridge |
 | PN-counter distribution | `IsoConserve.PNCounter.merge_assoc`, `IsoConserve.PNCounter.eval_eq_globalRecorded`, `IsoConserve.PNCounter.off_partition_decrement_surfaces` | proved | honest per-node ledgers by max; no CAP/gossip/Byzantine theorem |
 | Detector/progress signal | `IsoConserve.DetectorProgress.detector_sound`, `IsoConserve.DetectorProgress.detection_latency_le_budget`, `IsoConserve.DetectorProgress.live_process_not_detected`, `IsoConserve.DetectorProgress.liar_fails_reputation_check` | proved | supplied component; selected-attempt schedule; honest signal plus reputation |
