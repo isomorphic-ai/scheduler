@@ -401,3 +401,28 @@
    not consequences of the CoreRel↔TypedRun bridge. The comment remains, with its
    separate scope made explicit; deleting it would falsely report four additional
    obligations as discharged.
+
+37. Admissible core transitions now construct well-formed endpoints.
+
+   Merely quantifying `CoreRel` over `WFState` had hidden a construction gap: a
+   caller could supply the target proof, but the raw step and its plan did not
+   derive it. The genuine obstruction was `workStep`, which leaves `holds`
+   unchanged while `doneAfterWork` can mark a process done. The strengthened
+   `WorkPlan.completion_holds_nothing` requires precisely the missing fact on the
+   false-to-true completion branch; it does not weaken `CoreWF` or silently release
+   locks. This intentionally narrows `WorkRel`, and external plan constructors now
+   owe the new proof. There were no in-tree `CoreTrace.WorkPlan` record literals to
+   migrate, and the B1 event equivalence remains exact because work events carry
+   the strengthened plan.
+
+   `wf_workStep`, `wf_drainStep`, `wf_yieldStep`, `wf_routeStep`,
+   `wf_acquireStep`, and `wf_releaseStep` cover every field of `CoreWF`; the last
+   theorem applies to both normal and claim release. Acquire preservation needs
+   the existing `runnable` premise because acquiring sets a hold and runnable
+   entails `done = false`; its lock-free guard remains operational evidence rather
+   than a `CoreWF` premise. Seven `*StepOfWF` constructors and their relation
+   witnesses now produce the certified endpoints for all seven `CoreRel` arms.
+   `ResolutionYield.resolution_yield_preserves_coreWF` separately covers the
+   restart operation, including nonnegative banked credit, equal expanded budget
+   and cap, reset restart progress, cleared locks, and conserved accounting;
+   `resolutionYieldWFState` packages that endpoint.

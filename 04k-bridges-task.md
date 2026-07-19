@@ -85,12 +85,17 @@ in the theorem name AND a FINDINGS entry is acceptable for this round.
 
 ## WP-T1 — Preservation: transitions PRODUCE well-formed states
 
-Currently transitions relate caller-supplied WF endpoints; `workStep` can
-mark a process done while it still holds locks (violating done_holds_nothing
-— the Pro's concrete example, verified). Strengthen plans with the missing
-obligations (e.g. completion requires empty lock set or carries the
-releases) and prove preservation for all seven step kinds plus
-`resolutionYield`:
+**Status:** completed with the completion-side-condition form.
+`WorkPlan.completion_holds_nothing` rules out the one invalid raw work update:
+marking a not-yet-done lock holder done while leaving `holds`
+unchanged. `wf_workStep`, `wf_drainStep`, `wf_yieldStep`, `wf_routeStep`,
+`wf_acquireStep`, and `wf_releaseStep` prove every `CoreWF` field for all seven
+relation arms (the two release arms share the same transformer theorem), while
+`resolution_yield_preserves_coreWF` covers restart/yield. Seven relation-facing
+`*StepOfWF` constructors plus `resolutionYieldWFState` now construct certified
+endpoints instead of requiring callers to invent their proofs.
+
+The target was:
 
 ```
 CoreWF s → ValidPlan s pl → CoreWF (apply pl s)
