@@ -63,8 +63,18 @@ restart-local progress, `wants`, and `holds` live in one record. Public transiti
 use `WFState`, with ordinary execution separated from cure steps as `ExecRel`,
 `CureRel`, and `CoreRel`. `ExecRel` covers work, acquire, and normal release;
 `CureRel` covers drain, yield, route, and claim release. The work step does not
-implicitly release locks; release is an explicit event, which keeps the L3
-ordinary-execution/cure distinction visible.
+implicitly release locks; `WorkPlan.completion_holds_nothing` therefore permits a
+false-to-true completion only when the process already holds no locks. Release is
+an explicit event, which keeps the L3 ordinary-execution/cure distinction visible.
+
+The raw transition functions now have field-complete `CoreWF` preservation
+theorems. `workStepOfWF`, `acquireStepOfWF`, `execReleaseStepOfWF`,
+`drainStepOfWF`, `yieldStepOfWF`, `routeStepOfWF`, and
+`claimReleaseStepOfWF` construct the seven relation endpoints as `WFState`s;
+their companion `*_is_*Rel` theorems retain each operational plan and guard.
+Normal release and claim release share `wf_releaseStep`; acquire uses the existing
+`runnable` guard because adding a lock to a done process would violate
+`done_holds_nothing`.
 
 The trace layer is operationally typed. `EventRel` retains the dependent plan and
 admissibility evidence for each `CoreRel` arm, while `TypedRun` chains those events
@@ -579,7 +589,9 @@ The accounting theorems are `resolution_yield_conserves` for the whole state and
 `no_victim_accounted_progress_preserved` for the yielder's local account.
 `accounted_includes_banked_work` names the credit transfer, and `credit_monotone`
 states the monotonicity side under the explicit premise that the banked Q value is
-nonnegative.
+nonnegative. `resolution_yield_preserves_coreWF` proves every unified
+well-formedness field is preserved, and `resolutionYieldWFState` packages the
+result as a certified endpoint.
 
 Component breakage is not inferred from yield alone. A `ReleaseWitness` identifies
 the yielder, waiter, and lock edge being released. `yield_releases_wait_edge` proves

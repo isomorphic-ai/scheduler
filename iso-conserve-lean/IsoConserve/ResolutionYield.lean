@@ -57,6 +57,59 @@ theorem resolution_yield_conserves {n m : Nat}
   intro p
   exact resolutionProc_accounted s y p
 
+theorem resolution_yield_preserves_coreWF {n m : Nat}
+    (s : CoreState n m) (y : ProcId n) (hwf : CoreWF s) :
+    CoreWF (resolutionYield s y) := by
+  constructor
+  · exact hwf.cost_pos
+  · exact hwf.reserve_nonneg
+  · intro p
+    by_cases hp : p = y
+    · simpa [resolutionYield, resolutionProc, hp] using hwf.stock_nonneg p
+    · simpa [resolutionYield, resolutionProc, hp] using hwf.stock_nonneg p
+  · intro p
+    by_cases hp : p = y
+    · have hcredit := hwf.credit_nonneg p
+      have hcost : 0 <= s.convertCost := Rat.le_of_lt hwf.cost_pos
+      have hunits :
+          (0 : Qty) <= ((s.procs p).convertedSinceRestart : Qty) := by
+        grind
+      have hbank :
+          0 <= s.convertCost * ((s.procs p).convertedSinceRestart : Qty) :=
+        Rat.mul_nonneg hcost hunits
+      simp [resolutionYield, resolutionProc, hp]
+      grind
+    · simpa [resolutionYield, resolutionProc, hp] using hwf.credit_nonneg p
+  · intro p
+    by_cases hp : p = y
+    · simpa [resolutionYield, resolutionProc, hp] using hwf.rate_nonneg p
+    · simpa [resolutionYield, resolutionProc, hp] using hwf.rate_nonneg p
+  · intro p
+    by_cases hp : p = y
+    · simp [resolutionYield, resolutionProc, hp]
+    · simpa [resolutionYield, resolutionProc, hp] using hwf.budget_le_cap p
+  · intro p
+    by_cases hp : p = y
+    · simp [resolutionYield, resolutionProc, hp]
+    · simpa [resolutionYield, resolutionProc, hp] using hwf.since_le_total p
+  · intro p l hdone
+    by_cases hp : p = y
+    · simp [resolutionYield, resolutionProc, hp] at hdone
+    · have hdone_before : (s.procs p).done = true := by
+        simpa [resolutionYield, resolutionProc, hp] using hdone
+      simpa [resolutionYield, hp] using
+        hwf.done_holds_nothing p l hdone_before
+  · calc
+      CoreTrace.accounted (resolutionYield s y) = CoreTrace.accounted s :=
+        resolution_yield_conserves s y
+      _ = s.totalQ := hwf.accounted_eq_total
+      _ = (resolutionYield s y).totalQ := rfl
+
+def resolutionYieldWFState {n m : Nat}
+    (s : WFState n m) (y : ProcId n) : WFState n m :=
+  { state := resolutionYield s.state y
+    wf := resolution_yield_preserves_coreWF s.state y s.wf }
+
 theorem resolution_yield_loses_no_accounted_work {n m : Nat}
     (s : CoreState n m) (y : ProcId n) :
     CoreTrace.procAccounted (resolutionYield s y).convertCost

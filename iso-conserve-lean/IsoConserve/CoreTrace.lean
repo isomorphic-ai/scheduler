@@ -109,6 +109,11 @@ structure WorkPlan {n m : Nat} (s : CoreState n m) where
   flow_nonneg : forall p, 0 <= flow p
   flow_only_runnable : forall p, ¬ runnable s p -> flow p = 0
   convert_only_canConvert : forall p, ¬ canConvert s p -> convert p = 0
+  completion_holds_nothing : forall p l,
+    (s.procs p).done = false ->
+    0 < convert p ->
+    (s.procs p).workNeeded <= (s.procs p).convertedTotal + convert p ->
+    s.holds p l = false
   reserve_after_nonneg : 0 <= s.reserve - sumFin flow
   stock_after_nonneg : forall p,
     0 <= (s.procs p).stock + flow p -
@@ -175,6 +180,48 @@ theorem work_conservation {n m : Nat} (s : CoreState n m)
               plan.flow
   grind
 
+theorem wf_workStep {n m : Nat} (s : CoreState n m)
+    (plan : WorkPlan s) (h : CoreWF s) : CoreWF (workStep s plan) := by
+  constructor
+  · exact h.cost_pos
+  · exact plan.reserve_after_nonneg
+  · intro p
+    exact plan.stock_after_nonneg p
+  · intro p
+    simpa [workStep, workProc] using h.credit_nonneg p
+  · intro p
+    simpa [workStep, workProc] using h.rate_nonneg p
+  · intro p
+    unfold workStep workProc
+    by_cases hc : 0 < plan.convert p
+    · simp [hc]
+    · simp [hc]
+      exact h.budget_le_cap p
+  · intro p
+    have hle := h.since_le_total p
+    have hnew :
+        (s.procs p).convertedSinceRestart + plan.convert p <=
+          (s.procs p).convertedTotal + plan.convert p := by
+      omega
+    simpa [workStep, workProc] using hnew
+  · intro p l hdone
+    change doneAfterWork s plan p = true at hdone
+    change s.holds p l = false
+    cases hsource : (s.procs p).done with
+    | false =>
+        by_cases hcomplete :
+            0 < plan.convert p /\
+              (s.procs p).workNeeded <=
+                (s.procs p).convertedTotal + plan.convert p
+        · exact plan.completion_holds_nothing p l hsource
+            hcomplete.1 hcomplete.2
+        · simp [doneAfterWork, hsource, hcomplete] at hdone
+    | true =>
+        exact h.done_holds_nothing p l hsource
+  · calc
+      accounted (workStep s plan) = accounted s := work_conservation s plan
+      _ = s.totalQ := h.accounted_eq_total
+
 structure DrainPlan {n m : Nat} (s : CoreState n m) where
   amount : ProcId n -> Qty
   amount_nonneg : forall p, 0 <= amount p
@@ -225,6 +272,32 @@ theorem drain_conservation {n m : Nat} (s : CoreState n m)
               plan.amount
   grind
 
+theorem wf_drainStep {n m : Nat} (s : CoreState n m)
+    (plan : DrainPlan s) (h : CoreWF s) : CoreWF (drainStep s plan) := by
+  constructor
+  · exact h.cost_pos
+  · have hsum : 0 <= sumFin plan.amount :=
+      sumFin_nonneg plan.amount plan.amount_nonneg
+    have hr := h.reserve_nonneg
+    change 0 <= s.reserve + sumFin plan.amount
+    grind
+  · intro p
+    exact plan.stock_after_nonneg p
+  · intro p
+    simpa [drainStep, drainProc] using h.credit_nonneg p
+  · intro p
+    simpa [drainStep, drainProc] using h.rate_nonneg p
+  · intro p
+    simpa [drainStep, drainProc] using h.budget_le_cap p
+  · intro p
+    simpa [drainStep, drainProc] using h.since_le_total p
+  · intro p l hdone
+    apply h.done_holds_nothing p l
+    simpa [drainStep, drainProc] using hdone
+  · calc
+      accounted (drainStep s plan) = accounted s := drain_conservation s plan
+      _ = s.totalQ := h.accounted_eq_total
+
 structure YieldPlan {n m : Nat} (s : CoreState n m) where
   amount : ProcId n -> Qty
   amount_nonneg : forall p, 0 <= amount p
@@ -260,6 +333,31 @@ theorem yield_conservation {n m : Nat} (s : CoreState n m)
   apply sumFin_congr
   intro p
   exact procAccounted_yieldProc s plan p
+
+theorem wf_yieldStep {n m : Nat} (s : CoreState n m)
+    (plan : YieldPlan s) (h : CoreWF s) : CoreWF (yieldStep s plan) := by
+  constructor
+  · exact h.cost_pos
+  · exact h.reserve_nonneg
+  · intro p
+    exact plan.stock_after_nonneg p
+  · intro p
+    have hcredit := h.credit_nonneg p
+    have hamount := plan.amount_nonneg p
+    change 0 <= (s.procs p).credit + plan.amount p
+    grind
+  · intro p
+    simpa [yieldStep, yieldProc] using h.rate_nonneg p
+  · intro p
+    simpa [yieldStep, yieldProc] using h.budget_le_cap p
+  · intro p
+    simpa [yieldStep, yieldProc] using h.since_le_total p
+  · intro p l hdone
+    apply h.done_holds_nothing p l
+    simpa [yieldStep, yieldProc] using hdone
+  · calc
+      accounted (yieldStep s plan) = accounted s := yield_conservation s plan
+      _ = s.totalQ := h.accounted_eq_total
 
 structure RoutePlan {n m : Nat} (s : CoreState n m) where
   delta : ProcId n -> Qty
@@ -313,6 +411,28 @@ theorem route_conservation {n m : Nat} (s : CoreState n m)
   rw [hsum, plan.sum_delta_zero]
   grind
 
+theorem wf_routeStep {n m : Nat} (s : CoreState n m)
+    (plan : RoutePlan s) (h : CoreWF s) : CoreWF (routeStep s plan) := by
+  constructor
+  · exact h.cost_pos
+  · exact h.reserve_nonneg
+  · intro p
+    exact plan.stock_after_nonneg p
+  · intro p
+    simpa [routeStep, routeProc] using h.credit_nonneg p
+  · intro p
+    simpa [routeStep, routeProc] using h.rate_nonneg p
+  · intro p
+    simpa [routeStep, routeProc] using h.budget_le_cap p
+  · intro p
+    simpa [routeStep, routeProc] using h.since_le_total p
+  · intro p l hdone
+    apply h.done_holds_nothing p l
+    simpa [routeStep, routeProc] using hdone
+  · calc
+      accounted (routeStep s plan) = accounted s := route_conservation s plan
+      _ = s.totalQ := h.accounted_eq_total
+
 def acquireStep {n m : Nat} (s : CoreState n m)
     (p : ProcId n) (l : LockId m) : CoreState n m :=
   { s with
@@ -338,6 +458,109 @@ theorem release_conservation {n m : Nat} (s : CoreState n m)
     (p : ProcId n) (l : LockId m) :
     accounted (releaseStep s p l) = accounted s := by
   rfl
+
+theorem wf_acquireStep {n m : Nat} (s : CoreState n m)
+    (actor : ProcId n) (lock : LockId m)
+    (hrun : runnable s actor) (h : CoreWF s) :
+    CoreWF (acquireStep s actor lock) := by
+  constructor
+  · exact h.cost_pos
+  · exact h.reserve_nonneg
+  · intro p
+    by_cases hp : p = actor
+    · simpa [acquireStep, hp] using h.stock_nonneg p
+    · simpa [acquireStep, hp] using h.stock_nonneg p
+  · intro p
+    by_cases hp : p = actor
+    · simpa [acquireStep, hp] using h.credit_nonneg p
+    · simpa [acquireStep, hp] using h.credit_nonneg p
+  · intro p
+    by_cases hp : p = actor
+    · simpa [acquireStep, hp] using h.rate_nonneg p
+    · simpa [acquireStep, hp] using h.rate_nonneg p
+  · intro p
+    by_cases hp : p = actor
+    · simpa [acquireStep, hp] using h.budget_le_cap p
+    · simpa [acquireStep, hp] using h.budget_le_cap p
+  · intro p
+    by_cases hp : p = actor
+    · simpa [acquireStep, hp] using h.since_le_total p
+    · simpa [acquireStep, hp] using h.since_le_total p
+  · intro p l hdone
+    by_cases hp : p = actor
+    · subst p
+      have hdone_source : (s.procs actor).done = true := by
+        simpa [acquireStep] using hdone
+      rw [hrun.1] at hdone_source
+      contradiction
+    · have hdone_source : (s.procs p).done = true := by
+        simpa [acquireStep, hp] using hdone
+      have hhold := h.done_holds_nothing p l hdone_source
+      simpa [acquireStep, hp] using hhold
+  · calc
+      accounted (acquireStep s actor lock) = accounted s :=
+        acquire_conservation s actor lock
+      _ = s.totalQ := h.accounted_eq_total
+
+theorem wf_releaseStep {n m : Nat} (s : CoreState n m)
+    (actor : ProcId n) (lock : LockId m) (h : CoreWF s) :
+    CoreWF (releaseStep s actor lock) := by
+  constructor
+  · exact h.cost_pos
+  · exact h.reserve_nonneg
+  · exact h.stock_nonneg
+  · exact h.credit_nonneg
+  · exact h.rate_nonneg
+  · exact h.budget_le_cap
+  · exact h.since_le_total
+  · intro p l hdone
+    unfold releaseStep
+    by_cases hreleased : p = actor /\ l = lock
+    · simp [hreleased]
+    · simp [hreleased]
+      exact h.done_holds_nothing p l hdone
+  · calc
+      accounted (releaseStep s actor lock) = accounted s :=
+        release_conservation s actor lock
+      _ = s.totalQ := h.accounted_eq_total
+
+def workStepOfWF {n m : Nat} (s : WFState n m)
+    (plan : WorkPlan s.state) : WFState n m :=
+  { state := workStep s.state plan
+    wf := wf_workStep s.state plan s.wf }
+
+def acquireStepOfWF {n m : Nat} (s : WFState n m)
+    (actor : ProcId n) (lock : LockId m)
+    (hrun : runnable s.state actor)
+    (_hfree : forall q, s.state.holds q lock = false) : WFState n m :=
+  { state := acquireStep s.state actor lock
+    wf := wf_acquireStep s.state actor lock hrun s.wf }
+
+def execReleaseStepOfWF {n m : Nat} (s : WFState n m)
+    (actor : ProcId n) (lock : LockId m)
+    (_hrun : runnable s.state actor) : WFState n m :=
+  { state := releaseStep s.state actor lock
+    wf := wf_releaseStep s.state actor lock s.wf }
+
+def drainStepOfWF {n m : Nat} (s : WFState n m)
+    (plan : DrainPlan s.state) : WFState n m :=
+  { state := drainStep s.state plan
+    wf := wf_drainStep s.state plan s.wf }
+
+def yieldStepOfWF {n m : Nat} (s : WFState n m)
+    (plan : YieldPlan s.state) : WFState n m :=
+  { state := yieldStep s.state plan
+    wf := wf_yieldStep s.state plan s.wf }
+
+def routeStepOfWF {n m : Nat} (s : WFState n m)
+    (plan : RoutePlan s.state) : WFState n m :=
+  { state := routeStep s.state plan
+    wf := wf_routeStep s.state plan s.wf }
+
+def claimReleaseStepOfWF {n m : Nat} (s : WFState n m)
+    (actor : ProcId n) (lock : LockId m) : WFState n m :=
+  { state := releaseStep s.state actor lock
+    wf := wf_releaseStep s.state actor lock s.wf }
 
 def WorkRel {n m : Nat} (s t : WFState n m) : Prop :=
   exists plan : WorkPlan s.state, t.state = workStep s.state plan
@@ -371,6 +594,40 @@ def CureRel {n m : Nat} (s t : WFState n m) : Prop :=
 
 def CoreRel {n m : Nat} (s t : WFState n m) : Prop :=
   ExecRel s t \/ CureRel s t
+
+theorem workStepOfWF_is_workRel {n m : Nat} (s : WFState n m)
+    (plan : WorkPlan s.state) : WorkRel s (workStepOfWF s plan) := by
+  exact ⟨plan, rfl⟩
+
+theorem acquireStepOfWF_is_execAcquireRel {n m : Nat} (s : WFState n m)
+    (actor : ProcId n) (lock : LockId m)
+    (hrun : runnable s.state actor)
+    (hfree : forall q, s.state.holds q lock = false) :
+    ExecAcquireRel s (acquireStepOfWF s actor lock hrun hfree) := by
+  exact ⟨actor, lock, hrun, hfree, rfl⟩
+
+theorem execReleaseStepOfWF_is_execReleaseRel {n m : Nat}
+    (s : WFState n m) (actor : ProcId n) (lock : LockId m)
+    (hrun : runnable s.state actor) :
+    ExecReleaseRel s (execReleaseStepOfWF s actor lock hrun) := by
+  exact ⟨actor, lock, hrun, rfl⟩
+
+theorem drainStepOfWF_is_drainRel {n m : Nat} (s : WFState n m)
+    (plan : DrainPlan s.state) : DrainRel s (drainStepOfWF s plan) := by
+  exact ⟨plan, rfl⟩
+
+theorem yieldStepOfWF_is_yieldRel {n m : Nat} (s : WFState n m)
+    (plan : YieldPlan s.state) : YieldRel s (yieldStepOfWF s plan) := by
+  exact ⟨plan, rfl⟩
+
+theorem routeStepOfWF_is_routeRel {n m : Nat} (s : WFState n m)
+    (plan : RoutePlan s.state) : RouteRel s (routeStepOfWF s plan) := by
+  exact ⟨plan, rfl⟩
+
+theorem claimReleaseStepOfWF_is_releaseClaimRel {n m : Nat}
+    (s : WFState n m) (actor : ProcId n) (lock : LockId m) :
+    ReleaseClaimRel s (claimReleaseStepOfWF s actor lock) := by
+  exact ⟨actor, lock, rfl⟩
 
 theorem exec_step_conserves_accounted {n m : Nat} {s t : WFState n m}
     (h : ExecRel s t) : accounted t.state = accounted s.state := by
