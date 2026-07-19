@@ -306,3 +306,16 @@
    effective-rate equation and canonical `pythonRatePlan` wiring are not yet
    landed; they need the acyclic/fuel/live-intermediate premises pinned rather
    than silently inferred from the destination-sum theorem.
+
+32. PN-counter distribution conserves per-node ledgers by max, not replica values by sum.
+
+   `IsoConserve.PNCounter` mechanizes the 04e CRDT kernel. `merge` is a least
+   upper bound under componentwise ledger order and satisfies `merge_idem`,
+   `merge_comm`, and `merge_assoc`; `eval_eq_globalRecorded` proves merge-tree
+   convergence to the same pointwise recorded ledger. The no-loss theorems
+   `replica_le_globalRecorded`, `partition_left_le_heal`,
+   `partition_right_le_heal`, `off_partition_decrement_surfaces`, and
+   `off_partition_increment_surfaces` make the paper's "hidden by partition, not
+   destroyed" claim precise. The sharpening is explicit: conservation is of
+   honest per-node grow-only evidence by `max`; summing replica-local `value`s
+   would double-count shared observations and is intentionally not a theorem.

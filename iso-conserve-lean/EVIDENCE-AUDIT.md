@@ -1,19 +1,19 @@
 # Lean Evidence Audit
 
-- Git HEAD: `819bd20`
+- Git HEAD: `1ee1db7`
 - Report note: this records the tree at the Git HEAD above; rerun `tools/lean-evidence-audit` for the current HEAD.
 - Worktree dirty at audit run: `yes`
 - Build: `PASS`
 - Sorry/admit/axiom scan: `PASS`
 - Headline `#print axioms`: `PASS`
-- Lean modules: `19`
-- Source lines under `IsoConserve/`: `5619`
-- Syntactic theorem/lemma declarations: `344`
+- Lean modules: `20`
+- Source lines under `IsoConserve/`: `5937`
+- Syntactic theorem/lemma declarations: `373`
 
 ## Build Log
 
 ```text
-Build completed successfully (22 jobs).
+Build completed successfully (23 jobs).
 ```
 
 ## Sorry Admit Axiom Scan
@@ -128,6 +128,7 @@ IsoConserve/L2Monotone.lean
 IsoConserve/L3Absorbing.lean
 IsoConserve/L4Integral.lean
 IsoConserve/Noether.lean
+IsoConserve/PNCounter.lean
 IsoConserve/PaperClaims.lean
 IsoConserve/PaperInvariants.lean
 IsoConserve/Polarity.lean
@@ -157,7 +158,7 @@ IsoConserve/WaitGraph.lean
 | PaperClaims current surface | `IsoConserve.PaperClaims.*` current aliases | proved | future claims omitted until source modules land |
 | Unified core trace | `IsoConserve.CoreTrace.core_reachable_conserves_accounted`, `IsoConserve.CoreTrace.deadlock_exec_fixed`, `IsoConserve.CoreTrace.L4_stock_is_trace_integral` | proved | shared surface; full old-to-new simulation not proved |
 | Rate routing | `IsoConserve.RateRouting.routed_rate_conserved`, `IsoConserve.RateRouting.pathfinder_low_share_eq_ten_thirteenths`, `IsoConserve.RateRouting.no_stored_boost_state` | partial | destination-sum KCL, exact shares, and memoryless return proved; recursive equation/canonical wiring remain |
-| PN-counter distribution | `04e-lean-task.md` | review-gated | not implemented |
+| PN-counter distribution | `IsoConserve.PNCounter.merge_assoc`, `IsoConserve.PNCounter.eval_eq_globalRecorded`, `IsoConserve.PNCounter.off_partition_decrement_surfaces` | proved | honest per-node ledgers by max; no CAP/gossip/Byzantine theorem |
 | Detector/progress signal | `IsoConserve.DetectorProgress.detector_sound`, `IsoConserve.DetectorProgress.detection_latency_le_budget`, `IsoConserve.DetectorProgress.live_process_not_detected`, `IsoConserve.DetectorProgress.liar_fails_reputation_check` | proved | supplied component; selected-attempt schedule; honest signal plus reputation |
 | Resolution yield | `IsoConserve.ResolutionYield.resolution_yield_conserves`, `IsoConserve.ResolutionYield.yield_breaks_closed_component`, `IsoConserve.ResolutionYield.positive_credit_gain_finite_requirement_eventually_completes` | proved | supplied released-edge witness; Nat-unit toy termination |
 | Theorem 1 | `04i-theorem1-task.md` | review-gated | not implemented |

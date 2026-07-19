@@ -334,8 +334,13 @@ weights instead of supplied weights.
 
 ## Tier C — the distribution module (write `04e-lean-task.md` FIRST)
 
-**Status:** task file drafted as `04e-lean-task.md`; implementation is gated on
-review of that task file.
+**Status:** implemented in `IsoConserve.PNCounter` after Review #7's approval and
+the small task-file polish commit. The module proves pointwise ledger order,
+merge as least upper bound, merge ACI, inc/dec ledger monotonicity, arbitrary
+merge-tree convergence to `globalRecorded`, heal no-loss for left/right
+partitions, and exact off-partition debt/credit surfacing. Boundaries remain:
+CAP-as-schedule, Present/Future publish protocol, gossip latency, open-system
+sources/sinks, and Byzantine contribution safety are out of scope.
 
 5. **4.5: PN-counter conservation across partition.** Self-contained
    module, no scheduler imports: per-node grow-only `pos/neg : Node →
