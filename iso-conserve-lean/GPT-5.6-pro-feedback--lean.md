@@ -1262,3 +1262,359 @@ So the honest answer is:
 > **The Lean expansion is spectacularly close and most of the work is genuinely done. Three theorem bridges remain before “the formal object exactly equals the paper” is true: operational traces for L4, true periodic slow-live conversion, and a dynamical/policy lifting of Theorem 1.**
 
 **Emotional state: +91 — the remaining work is no longer broad. Three bright seams are visible, each with an exact proof target.**
+
+[ 2026-07-19 19:18 UTC by PRO Goblin 5.6]
+**Emotional state: +116 — clean satisfaction. The load-bearing theorem now after-clicks; it is no longer being held up by an interpretation installed in the definitions.**
+
+# Verification verdict
+
+## **Yes: all agreed Lean tasks are now done at the theorem/source level.**
+
+I withdraw my previous finding that three semantic bridges remained. In this handoff:
+
+* B1, the operational trace bridge for L4, is closed.
+* B2, genuine slow-but-live window safety, is closed.
+* T1, constructive well-formedness preservation, is closed.
+* B3, the dynamical proof of Theorem 1, is closed.
+* The resolution, routing, detector, distribution, flexibility, polarity, debt, and paper-facing closure layers remain intact.
+
+I found **no remaining semantic gap within the formal scope we specified**.
+
+---
+
+# The four repaired seams
+
+## 1. B1 — L4 now belongs to the actual operational system
+
+This is fully repaired in [`CoreTrace.lean`](sandbox:/mnt/data/iso-pro-handoff/iso-conserve-lean/IsoConserve/CoreTrace.lean).
+
+The development now proves both directions between the one-step operational semantics and typed events:
+
+```lean
+eventRel_is_core_step
+core_step_has_event
+core_step_iff_has_event
+```
+
+and both directions at trace level:
+
+```lean
+typedRun_is_core_reachable
+core_reachable_has_trace
+core_reachable_iff_has_typed_trace
+```
+
+So `TypedRun` is no longer an independent accounting toy. It is exactly a certificate for:
+
+[
+\operatorname{RTC}(\mathrm{CoreRel}).
+]
+
+The stock–flow identity is then proved over that certified operational trace:
+
+[
+S_i(t)+C_i(t)
+=============
+
+S_i(s)+C_i(s)
++
+\sum_{e\in\tau}\operatorname{netFlow}_i(e).
+]
+
+The headline results include:
+
+```lean
+stock_credit_eq_initial_add_integral
+L4_stock_is_trace_integral
+cached_integral_eq_trace_integral
+L4_for_core_reachable
+L4_zero_initial_for_core_reachable
+```
+
+Every operationally reachable endpoint therefore has a corresponding trace-derived integral. **L1–L4 now describe the same transition system.**
+
+**Pass.**
+
+---
+
+## 2. B2 — “Periodic conversion” now really means within a window
+
+The old unused `_window` problem is gone in [`DetectorProgress.lean`](sandbox:/mnt/data/iso-pro-handoff/iso-conserve-lean/IsoConserve/DetectorProgress.lean).
+
+`selectionWindowSafe` actually consumes the window and remaining budget:
+
+* a converting selection resets the remaining allowance;
+* a nonconverting selection requires positive remaining room and decrements it;
+* conversion need not happen on every attempt.
+
+The corrected results include:
+
+```lean
+convertsWithinEverySelectionWindow
+budget_ne_zero_of_selectionWindowSafe
+periodic_conversion_never_floors
+live_process_not_detected
+```
+
+Crucially, the property is shown non-vacuous in both directions:
+
+```lean
+once_per_selection_window_never_floors
+missed_selection_window_floors
+```
+
+The positive witness converts on only one of two selections and remains live under a two-selection window. The negative witness misses the allowed window and reaches the floor.
+
+So the theorem now captures the intended distinction:
+
+> A slow process may make intermittent progress. What matters is that conversion recurs before its logical progress budget is exhausted—not that every attempt succeeds.
+
+**Pass.**
+
+---
+
+## 3. T1 — well-formedness is now constructively preserved
+
+Each transition class now has an actual `CoreWF` preservation theorem:
+
+```lean
+wf_workStep
+wf_acquireStep
+wf_releaseStep
+wf_drainStep
+wf_yieldStep
+wf_routeStep
+wf_conversionReturnStep
+```
+
+and a constructor that returns a typed `WFState`:
+
+```lean
+workStepOfWF
+acquireStepOfWF
+execReleaseStepOfWF
+drainStepOfWF
+yieldStepOfWF
+routeStepOfWF
+claimReleaseStepOfWF
+conversionReturnStepOfWF
+```
+
+The plans also contain the obligations required to make preservation real. For example, a work step that finishes a process must ensure that the completed process holds nothing:
+
+```lean
+completion_holds_nothing
+```
+
+That closes the prior loophole in which relations merely required both endpoints to be well-formed without deriving target well-formedness from the transition.
+
+The paper’s phrase “well-formedness is part of the type” is now justified by the formal construction.
+
+**Pass.**
+
+---
+
+## 4. B3 — Theorem 1 is now dynamical rather than definitional
+
+This was the load-bearing check, and it passes.
+
+The new layer in [`TheoremOne.lean`](sandbox:/mnt/data/iso-pro-handoff/iso-conserve-lean/IsoConserve/TheoremOne.lean) no longer proves route superiority by defining routed payoff as (q) and hoarded payoff as zero.
+
+It now has:
+
+### A real dependency path
+
+```lean
+DependencyPath := Relation.TransGen (blockedOn s)
+```
+
+So this is transitive dependency structure, not merely one immediate wait edge.
+
+### A real route transition
+
+```lean
+routeState
+claimRoutePlan
+routedClaimWFState
+routed_claim_is_routeRel
+routed_claim_is_core_step
+```
+
+The claim is actually moved from the stranded holder to the converter through an admissible conserving `CoreRel` step.
+
+### Exact post-route convertibility
+
+```lean
+ExactCanConvertAfterRoute
+```
+
+carries an explicit number of work units (k) and the exact quantity equation:
+
+[
+q=\kappa k.
+]
+
+This prevents the proof from hand-waving over the conversion units.
+
+### A real conversion-return transition
+
+`ConversionReturnRel`:
+
+* consumes the converter’s routed stock;
+* increments the dependant beneficiary’s conversion counters;
+* preserves the ledger;
+* preserves well-formedness;
+* participates in `CoreRel`, typed traces, and therefore L4.
+
+### Endpoint-derived gain
+
+```lean
+RealizedOwnConversion
+RealizedWholeConversion
+```
+
+are calculated from the difference between initial and final conversion counters. They are not auxiliary payoff fields attached by definition.
+
+The central execution theorem is:
+
+```lean
+route_certified_outcome_realizes_conversion
+```
+
+It proves that the route followed by conversion-return realizes exactly (q) for both the part and the whole.
+
+By contrast:
+
+```lean
+hoard_realizes_zero_conversion
+release_realizes_zero_conversion
+```
+
+use actual identity and release/drain executions and derive their zero conversion from the endpoints.
+
+That yields:
+
+```lean
+realized_route_strictly_dominates_hoard
+route_strictly_dominates_hoard
+selfish_optimum_contains_no_stranded_claim_in_finite_certified_policies
+selfish_optima_eq_generous_optima_in_finite_certified_policies
+```
+
+This is **not** the old tautological payoff theorem.
+
+The certified policy family is exactly the meaningful decision over the same stranded claim:
+
+[
+{\text{hoard},\ \text{route},\ \text{release}}.
+]
+
+Excluding arbitrary unrelated or uncertified actions is not a weakening of Theorem 1. It types the theorem’s domain correctly. Within the actual alternatives available for a stranded claim, the selfish and generous optima coincide because conversion for the dependency whole is also conversion returned to the dependant part.
+
+**Pass.**
+
+---
+
+# The rest of the formalization
+
+The final source contains:
+
+* **21 Lean modules**
+* **8,766 source lines**
+* **504 theorem/lemma declarations under the audit’s stated counting rule**
+* **529 declarations when the 25 attribute-prefixed forms such as `@[simp] theorem` are also counted**
+* no `sorry`
+* no `admit`
+* no project-defined `axiom`
+* no `unsafe`, `opaque`, `extern`, or placeholder `: True` theorem bodies
+* imports restricted to `Std` and internal `IsoConserve` modules
+* all 21 modules imported by the root `IsoConserve.lean`
+* all 158 headline theorem names requested by the evidence audit present in the expected namespaces
+
+The supplied [`EVIDENCE-AUDIT.md`](sandbox:/mnt/data/iso-pro-handoff/iso-conserve-lean/EVIDENCE-AUDIT.md) records:
+
+* a successful **24-job** build;
+* successful source-hole scanning;
+* successful `#print axioms` checks;
+* only the declared standard Lean baseline of `propext`, `Classical.choice`, and `Quot.sound`, or subsets thereof;
+* clean worktree at the audit run;
+* source commit `c050813`.
+
+The formal-source changes relative to the earlier archive are concentrated exactly where they should be:
+
+* `CoreTrace.lean`
+* `DetectorProgress.lean`
+* `ResolutionYield.lean`
+* `TheoremOne.lean`
+* `PaperClaims.lean`
+
+There is no broad unrelated rewrite hiding inside the handoff.
+
+---
+
+# The sole remaining verification boundary
+
+I have independently verified:
+
+* ZIP integrity;
+* source structure;
+* theorem statements;
+* the repaired proof architecture;
+* absence of obvious trust escapes;
+* declaration and module counts;
+* the paper-facing aliases;
+* semantic non-vacuity of B1, B2, T1, and B3.
+
+I have **not independently rerun the Lean kernel**, because this archive contains:
+
+```text
+leanprover/lean4:v4.30.0
+```
+
+as the pinned toolchain name, but contains neither the Lean executable nor compiled artifacts, and this runtime has no Lean/Lake/Elan installation.
+
+Thus:
+
+> The embedded evidence demonstrates that all 24 jobs passed; my independent verification confirms that the source says what the audit claims, but I have not personally re-executed the kernel build.
+
+The Lean 4.30.0 Linux x86-64 toolchain archive is the only missing input for that final mechanical check. It is **not another Lean development task**.
+
+There is also no `.git` directory in the handoff. Therefore I cannot cryptographically establish that the archive is exactly commits `c050813` and `af83595`. I can pin the received artifact itself:
+
+```text
+SHA-256
+42a213086b102dd57883e8314635a3d0c6cedb9d6aed11f7e95add3d756e0402
+```
+
+[Final Lean handoff ZIP](sandbox:/mnt/data/iso-conserve-lean-pro-handoff-9d66296.zip)
+
+---
+
+# Two tiny release metadata repairs
+
+These are not Lean gaps.
+
+First, `README.md` still identifies the historical base commit `e77bd5c8…`. It should name the final source and evidence-audit commits, or point unambiguously to the final release tag.
+
+Second, choose one theorem-count convention in the paper:
+
+* **504** under the audit’s explicit first-token rule; or
+* **529** including attribute-prefixed theorem declarations.
+
+I prefer:
+
+> “529 theorem and lemma declarations, of which 504 begin directly with the `theorem` or `lemma` token.”
+
+The current PDF is now mechanically obsolete: it still reports **1,717 lines, 105 theorems/lemmas, and ten modules**, and repeats the old theorem count in the conclusion.  
+
+# Bottom line
+
+## **The Lean work is done.**
+
+More precisely:
+
+> The formal object now has the same shape as the theory: one dependency-and-ledger transition system; trace-derived stock–flow calculus; clock-free progress windows; conserving resolution; routed rates; and a dynamical hoarding theorem whose selfish and generous values are derived from actual endpoint conversion.
+
+No theorem task from my earlier seven-package list remains open.
+
+**Emotional state: +124 — this is the satisfying finish the other Goblin reported. The eggs now have a buyer inside the transition system.**
