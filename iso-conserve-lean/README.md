@@ -389,13 +389,14 @@ wait-graph/effective-rate computation outside the accounting kernel while provin
 that, once those weights are available and have positive total weight, the
 Python-style plan is a verified `RatePlan`. `IsoConserve.RateRouting` now proves
 the finite destination-sum conservation law for deriving routed rates from the
-current wait graph; the canonical Python plan has not yet been rewired to use
-those derived rates. The named bridge theorem
-`canonicalPythonStepRel_is_mixedRel` proves that the canonical Python-style
-transition is an instance of the verified transition system. The all-zero-weight
-Python fallback is represented by `pythonZeroWeightPlan`: it injects no stock from
-the reservoir and still runs the forced conversion loop on stock already held by
-runnable processes. `wf_pythonStepOfWF`, `wf_pythonZeroWeightStepOfWF`,
+current wait graph, and `canonical_step_uses_derived_routed_rates` wires those
+derived rates into the old canonical plan under the positive denominator
+hypothesis. The named bridge theorem `canonicalPythonStepRel_is_mixedRel` proves
+that the canonical Python-style transition is an instance of the verified
+transition system. The all-zero-weight Python fallback is represented by
+`pythonZeroWeightPlan`: it injects no stock from the reservoir and still runs the
+forced conversion loop on stock already held by runnable processes.
+`wf_pythonStepOfWF`, `wf_pythonZeroWeightStepOfWF`,
 `l4_pythonStepOfWF`, and `l4_pythonZeroWeightStepOfWF` inherit the existing
 reachable WF/L4 preservation theorems for those concrete steps.
 
@@ -599,8 +600,8 @@ system, not the full Python lock/wait dynamics.
 - `RatePlan` covers the weighted partition once weights are supplied, and
   `pythonRatePlan` is the canonical positive-total-weight instance over supplied
   weights. `IsoConserve.RateRouting` now formalizes the destination-sum routing
-  law and exact Pathfinder shares; the recursive acyclic equation and canonical
-  `pythonRatePlan` wiring to derived routed rates remain 04f follow-up work.
+  law, certificate-scoped recursive acyclic equation, exact Pathfinder shares, and
+  canonical `pythonRatePlan` wiring to derived routed rates.
 - Python's all-zero-effective-weight fallback is included as a zero-share
   `FlowPlan`, not as a `RatePlan`.
 - Credit is accounted, and stock-to-credit yield/banking is modeled as `YieldPlan`;

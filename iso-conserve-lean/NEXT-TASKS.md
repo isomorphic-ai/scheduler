@@ -397,8 +397,7 @@ and regenerates `EVIDENCE-AUDIT.md`.
    obstruction (FINDINGS 20) as a cited *result*: the naive uniqueness
    reading is machine-checked false; normalized uniqueness is future
    work with its own task file. Remaining partial rows are the full
-   unrestricted policy theorem, the acyclic recursive rate equation plus
-   canonical wiring, and engine/production-only claims.
+   unrestricted policy theorem and engine/production-only claims.
 
 ## Standing rules: all carried. Task-file-first applies to Tiers B, C, D.
 
@@ -516,7 +515,6 @@ questions, and implementation order after review.
 
    **Status:** WP1+WP2 implemented in `IsoConserve.CoreTrace` after Review #7's
    fixes to `04d-core-trace-task.md`; WP3 implemented in
-   `IsoConserve.DetectorProgress` after the 04g task-file repair; WP5's conserved
-   destination-sum core is implemented in `IsoConserve.RateRouting`. Next downstream
-   action is the remaining 04f recursive-equation/canonical-wiring follow-up, or
-   the self-contained approved 04e PN-counter module.
+   `IsoConserve.DetectorProgress` after the 04g task-file repair; WP5 is implemented
+   through the destination-sum core, certificate-scoped recursive equation, and
+   canonical routed-rate bridge; 04e PN-counter is also implemented.

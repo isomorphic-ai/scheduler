@@ -1,6 +1,6 @@
 # Lean Evidence Audit
 
-- Git HEAD: `ab3dc09`
+- Git HEAD: `c878b91`
 - Report note: this records the tree at the Git HEAD above; rerun `tools/lean-evidence-audit` for the current HEAD.
 - Worktree dirty at audit run: `yes`
 - Build: `PASS`
