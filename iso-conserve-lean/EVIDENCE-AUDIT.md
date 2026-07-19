@@ -1,15 +1,15 @@
 # Lean Evidence Audit
 
-- Git HEAD: `c878b91`
+- Git HEAD: `2a29078`
 - Report note: this records the tree at the Git HEAD above; rerun `tools/lean-evidence-audit` for the current HEAD.
-- Worktree dirty at audit run: `yes`
+- Worktree dirty at audit run: `no`
 - Build: `PASS`
 - Sorry/admit/axiom scan: `PASS`
 - Headline `#print axioms`: `PASS`
 - Allowed axiom baseline: `[propext, Classical.choice, Quot.sound]` and subsets only
 - Lean modules: `21`
-- Source lines under `IsoConserve/`: `6899`
-- Syntactic theorem/lemma declarations: `431`
+- Source lines under `IsoConserve/`: `6905`
+- Syntactic theorem/lemma declarations: `427`
 
 ## Build Log
 
