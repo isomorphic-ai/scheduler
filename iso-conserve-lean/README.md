@@ -92,7 +92,11 @@ ordinary-execution/cure distinction visible.
   instantiates L1 on that plan. `IsoConserve.canonicalPythonStepRel_is_mixedRel`
   is the bridge theorem: every well-formed canonical Python-style flow step
   (positive effective weight or all-zero-weight fallback) is a verified
-  mixed-system step.
+  mixed-system step. `IsoConserve.coreAsSys`, `routedWeights`,
+  `canonical_step_uses_derived_routed_rates`, and
+  `pythonRoutedRateStep_verified_mixed` bridge the unified `CoreState` routing
+  model back into that old `Sys` API: with a positive routed-weight denominator,
+  the canonical Python-style step uses derived `RateRouting.routedRate` weights.
 - Resolution credit core: `IsoConserve.credit_monotone_under_yield_reachable`
   proves banked credit is non-decreasing over yield-only reachability.
 - Resolution yield WP4:
@@ -185,8 +189,10 @@ ordinary-execution/cure distinction visible.
   quantum when the routed-rate denominator is positive. The canonical Pathfinder
   witness is exact over rationals: `pathfinder_low_share_eq_ten_thirteenths`,
   `pathfinder_medium_share_eq_three_thirteenths`, and
-  `canonical_priority_inversion_cannot_form`. The remaining bridge is wiring these
-  derived routed weights into the old `Canonical.pythonRatePlan` API.
+  `canonical_priority_inversion_cannot_form`. `canonical_step_uses_derived_routed_rates`
+  wires these derived routed weights into the old `Canonical.pythonRatePlan` API
+  under the positive routed-weight denominator required by the canonical share
+  split.
 - PN-counter distribution 04e:
   `IsoConserve.PNCounter.merge_idem`, `merge_comm`, and `merge_assoc` prove the
   merge ACI surface for the pointwise-max ledger join, with `le_merge_left`,
@@ -229,7 +235,10 @@ aliases such as `PaperClaims.resolution_yield_loses_no_work`,
 and `PaperClaims.pn_counter_debt_surfaces`;
 plus the finite-action Theorem 1 aliases
 `PaperClaims.hoarding_is_self_defeating` and
-`PaperClaims.selfish_optima_eq_generous_optima`.
+`PaperClaims.selfish_optima_eq_generous_optima`. The canonical bridge aliases
+`PaperClaims.canonical_step_uses_derived_routed_rates` and
+`PaperClaims.python_routed_rate_step_verified` expose the derived-routed-rate
+Python-step instance.
 
 `PaperClaims.L2_monotonicity` is explicitly the repaired/restricted reading over
 blockedness-preserving core traces. The known-false unrestricted reading is exposed
