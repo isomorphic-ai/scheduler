@@ -1373,10 +1373,16 @@ theorem cure_can_break_absorption :
     exact ⟨pid1, lid1, rfl⟩
   · exact cycle_release_breaks_closed
 
-theorem old_L1_conservation_lifts : True := trivial
-theorem old_blocked_stock_monotone_lifts : True := trivial
-theorem old_budget_wait_detection_lifts : True := trivial
-theorem old_yield_conservation_lifts : True := trivial
+/-
+Compatibility obligations for a future full old-to-new simulation:
+
+- old L1 conservation should lift to `core_reachable_conserves_accounted`;
+- old blocked-stock monotonicity should lift to `blocked_stock_monotone`;
+- old BudgetWait detection should lift to the unified detector surface;
+- old yield conservation should lift to `cure_preserves_accounted`.
+
+They are intentionally documented here as obligations, not theorem declarations.
+-/
 
 end
 
