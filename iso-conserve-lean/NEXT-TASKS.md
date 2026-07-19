@@ -422,8 +422,13 @@ this side of the repo.*
   self-contained and can interleave wherever they don't touch the WP1/2
   core refactor.
 
-**WP3 status:** task file drafted as `04g-detector-progress-task.md`.
-Implementation waits on review and the unified core from `04d-core-trace-task.md`.
+**WP3 status:** implemented in `IsoConserve.DetectorProgress` after Review #7's
+fixes to `04g-detector-progress-task.md`. The module imports the unified
+`CoreTrace` state, defines schedule-driven `observeAttempt`/`runSchedule`,
+proves detector budget one-step facts, no-false-positive soundness, selected-count
+bounded detection, slow-live non-flooring under the repaired full-budget premise,
+and the `SIG_PROGRESS` useful/spinner/liar split. Automatic component discovery
+and Byzantine enforcement remain outside the theorem.
 
 **WP6 status:** task file drafted as `04i-theorem1-task.md`. Implementation waits
 on review and the dependency-return vocabulary from the unified core.
@@ -486,8 +491,7 @@ questions, and implementation order after review.
    task files should quote the claims.
 
    **Status:** WP1+WP2 implemented in `IsoConserve.CoreTrace` after Review #7's
-   fixes to `04d-core-trace-task.md`. The module exports the shared
-   `CoreProc`/`CoreState` shape, `WFState`, `ExecRel`/`CureRel`/`CoreRel`, the
-   repaired L2 statements, global ordinary-execution L3, cure escape witness, and
-   trace-derived L4 theorem. Next downstream action is to revise the remaining
-   approved-with-fixes task files against this shared core before their code starts.
+   fixes to `04d-core-trace-task.md`; WP3 implemented in
+   `IsoConserve.DetectorProgress` after the 04g task-file repair. Next downstream
+   action is to revise the 04h and 04f approved-with-fixes task files against the
+   shared core before their code starts.

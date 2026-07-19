@@ -81,6 +81,16 @@ headline_theorems=(
   IsoConserve.CoreTrace.stock_credit_eq_initial_add_integral
   IsoConserve.CoreTrace.L4_stock_is_trace_integral
   IsoConserve.CoreTrace.unrestricted_l2_is_false
+  IsoConserve.DetectorProgress.detector_sound
+  IsoConserve.DetectorProgress.periodic_conversion_never_floors
+  IsoConserve.DetectorProgress.live_process_not_detected
+  IsoConserve.DetectorProgress.closed_deadlock_eventually_floors
+  IsoConserve.DetectorProgress.deadlock_eventually_detected
+  IsoConserve.DetectorProgress.detection_latency_le_budget
+  IsoConserve.DetectorProgress.useful_reporter_never_reclaimed
+  IsoConserve.DetectorProgress.spinner_eventually_reclaimed
+  IsoConserve.DetectorProgress.liar_survives_in_loop_if_it_reports_progress
+  IsoConserve.DetectorProgress.liar_fails_reputation_check
   IsoConserve.Noether.mixedRel_accounted_clockFree
   IsoConserve.epistemic_invariant
   IsoConserve.alignment_invariant
@@ -203,7 +213,7 @@ fi
 | Unified core trace | `IsoConserve.CoreTrace.core_reachable_conserves_accounted`, `IsoConserve.CoreTrace.deadlock_exec_fixed`, `IsoConserve.CoreTrace.L4_stock_is_trace_integral` | proved | shared surface; downstream modules still need to import it |
 | Rate routing | `04f-rate-routing-task.md` | review-gated | not implemented |
 | PN-counter distribution | `04e-lean-task.md` | review-gated | not implemented |
-| Detector/progress signal | `04g-detector-progress-task.md` | review-gated | not implemented |
+| Detector/progress signal | `IsoConserve.DetectorProgress.detector_sound`, `IsoConserve.DetectorProgress.detection_latency_le_budget`, `IsoConserve.DetectorProgress.live_process_not_detected`, `IsoConserve.DetectorProgress.liar_fails_reputation_check` | proved | supplied component; selected-attempt schedule; honest signal plus reputation |
 | Resolution yield | `04h-resolution-yield-task.md` | review-gated | not implemented |
 | Theorem 1 | `04i-theorem1-task.md` | review-gated | not implemented |
 | PaperClaims final closure | `04j-paper-claims-task.md` | review-gated | waits for future modules before final aliases |

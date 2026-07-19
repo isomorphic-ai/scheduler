@@ -244,3 +244,30 @@
    wait graph, the detector must define scheduled attempts over the shared budget,
    and resolution yield must connect restart-local work banking to explicit claim
    release.
+
+27. Detector/progress is now lifted onto the unified core state.
+
+   `IsoConserve.DetectorProgress` imports `CoreTrace` and uses the shared
+   `CoreState` budget, wait, stock, and conversion fields. The one-attempt lemmas
+   `conversion_refills_budget`, `blocked_nonconversion_drains_budget`,
+   `budget_drop_implies_blocked`, and `budget_after_ge_pred` are the core-state
+   versions of the BudgetWait bridge. `detector_sound` proves no false positive
+   for a supplied nonempty closed floored component; `closed_deadlock_eventually_floors`
+   and `deadlock_eventually_detected` prove bounded completeness by selected
+   attempts; `periodic_conversion_never_floors` and `live_process_not_detected`
+   prove the slow-live safety side under the repaired full-budget initial
+   hypothesis. `SIG_PROGRESS` is modeled as an honest in-loop signal plus a
+   separate reputation check: a liar can survive the detector by reporting progress,
+   but fails `reputationConsistent` when reported progress exceeds delivered
+   progress.
+
+28. The first repaired latency-prefix statement was still too strong.
+
+   Review #7 required making `detection_latency_le_budget` concrete. The initial
+   repair tried to demand a detecting prefix where every component member had been
+   selected at most `k` times. That is false for unfairly ordered but ultimately
+   sufficient schedules: one member may be oversampled before the last member
+   reaches its budget bound. The committed theorem now states the sound bound as
+   prefix existence under the per-member lower-bound hypothesis; the selected-count
+   budget bound is carried by the schedule evidence, not by an unnecessary
+   per-member upper bound on the detecting prefix.
