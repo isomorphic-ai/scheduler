@@ -319,3 +319,16 @@
    destroyed" claim precise. The sharpening is explicit: conservation is of
    honest per-node grow-only evidence by `max`; summing replica-local `value`s
    would double-count shared observations and is intentionally not a theorem.
+
+33. Theorem 1 landed at the finite-action-set level.
+
+   `IsoConserve.TheoremOne.route_stranded_claim_strictly_dominates_hoard` proves
+   the local strict theorem with the reviewed definitions: payoff is
+   `ownConversion`, a stranded claim is held stock the holder cannot convert, and
+   `DependencyReturn` is directed (`blockedOn`), not undirected connectivity. The
+   committed policy theorem is the fallback promised in `04i-theorem1-task.md`:
+   `selfish_optima_eq_generous_optima` proves route is both selfishly and
+   generously optimal inside `{hoard, route, release}` for the supplied claim.
+   The full unrestricted policy theorem remains review-gated rather than hidden
+   behind a broad quantifier. `DebtLedger` is a standalone mini-model with debt
+   conservation and return lemmas; it is not yet wired as a `CoreState` field.

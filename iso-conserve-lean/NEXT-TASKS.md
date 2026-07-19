@@ -444,8 +444,11 @@ bounded detection, slow-live non-flooring under the repaired full-budget premise
 and the `SIG_PROGRESS` useful/spinner/liar split. Automatic component discovery
 and Byzantine enforcement remain outside the theorem.
 
-**WP6 status:** task file drafted as `04i-theorem1-task.md`. Implementation waits
-on review and the dependency-return vocabulary from the unified core.
+**WP6 status:** finite-action core implemented in `IsoConserve.TheoremOne` after
+Review #7's task-file fixes. The module proves strict route-over-hoard dominance
+for stranded claims, finite `{hoard, route, release}` selfish/generous optimality,
+and the standalone debt-ledger mini-model. The full unrestricted policy theorem
+and strengthened invariant-family aliases remain for a later 04i/04j closure pass.
 
 **Review queue:** `REVIEW-QUEUE.md` records the review order, per-task sign-off
 questions, and implementation order after review.
