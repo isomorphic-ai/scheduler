@@ -156,6 +156,9 @@ theorem merge_assoc
 These three names are the Lean form of "merge is a join on a semilattice, hence
 conflict-free."
 
+For counter equality over `Fin n -> Nat` fields, expect to use `funext`/fieldwise
+extensionality; do not hide this behind theorem-shaped placeholders.
+
 ---
 
 ## 4. Monotonicity And No-Loss Facts
@@ -258,9 +261,11 @@ theorem replica_le_globalRecorded
     le x (globalRecorded xs)
 
 theorem partition_left_le_heal
+    {n : Nat} (left right : List (Counter n)) :
     le (globalRecorded left) (globalRecorded (left ++ right))
 
 theorem partition_right_le_heal
+    {n : Nat} (left right : List (Counter n)) :
     le (globalRecorded right) (globalRecorded (left ++ right))
 ```
 
@@ -307,11 +312,12 @@ summing replica-local values.
 
 1. `lake build` succeeds from `iso-conserve-lean/`.
 2. No `sorry`, `admit`, or new `axiom` appears in `IsoConserve/`.
-3. `IsoConserve/PNCounter.lean` imports only `Std` or local helper-free code,
-   and is imported by `IsoConserve.lean`.
-4. README maps §4.5 to exact theorem names and names the boundaries above.
-5. FINDINGS records any theorem/prose sharpening discovered during the proof.
-6. This task file, the Lean module, README, and FINDINGS are committed together or
+3. Review approval for this task file is recorded before implementation begins.
+4. `IsoConserve/PNCounter.lean` imports only `Std`; any finite-sum helpers are
+   local to that module, and the finished module is imported by `IsoConserve.lean`.
+5. README maps §4.5 to exact theorem names and names the boundaries above.
+6. FINDINGS records any theorem/prose sharpening discovered during the proof.
+7. This task file, the Lean module, README, and FINDINGS are committed together or
    in coherent reviewable chunks with `/usr/local/bin/codex-git-commit`.
 
 ---
