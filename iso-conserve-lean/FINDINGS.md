@@ -238,12 +238,11 @@
 
    The compatibility exports `old_L1_conservation_lifts`,
    `old_blocked_stock_monotone_lifts`, `old_budget_wait_detection_lifts`, and
-   `old_yield_conservation_lifts` are documentation theorems today. WP3/WP4/WP5
-   still need to import `CoreTrace` and replace their draft-local state sketches
-   with this record. In particular, rate routing must derive route deltas from the
-   wait graph, the detector must define scheduled attempts over the shared budget,
-   and resolution yield must connect restart-local work banking to explicit claim
-   release.
+   `old_yield_conservation_lifts` are documentation theorems today. WP3, WP4, and
+   WP5 now import `CoreTrace` for their first theorem surfaces, but the compatibility
+   exports still do not prove a full old-to-new simulation. Remaining downstream
+   work should keep using the shared record rather than reviving draft-local state
+   sketches.
 
 27. Detector/progress is now lifted onto the unified core state.
 
@@ -294,3 +293,16 @@
    agree at the transition-semantics level. This belongs in the 04j/PaperClaims
    coverage table as implementation alignment for reading 4.1, not as a new Lean
    theorem.
+
+31. Rate routing's conserved core is destination-sum first; recursion is a follow-up.
+
+   `IsoConserve.RateRouting` proves the Review #7-repaired KCL theorem
+   `routed_rate_conserved`: every unfinished process's nonnegative `baseRate` is
+   counted exactly once, either at a runnable routed destination or in
+   `strandedRate` when the wait-chain does not reach one. The module also proves
+   exact Pathfinder shares (`10/13` for low, `3/13` for medium), memoryless return
+   (`remove_wait_edge_restores_base_rate`, `no_stored_boost_state`), and share
+   normalization (`shares_sum_quantum`). The task-file sketch's recursive
+   effective-rate equation and canonical `pythonRatePlan` wiring are not yet
+   landed; they need the acyclic/fuel/live-intermediate premises pinned rather
+   than silently inferred from the destination-sum theorem.

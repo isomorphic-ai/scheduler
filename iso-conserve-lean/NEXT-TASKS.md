@@ -298,9 +298,14 @@ member's starting budget floors the closed component.
 
 ## Tier B — the flow module (write `04d-lean-task.md` FIRST; the largest true gap)
 
-**Status:** task file drafted as `04f-rate-routing-task.md` under the Round 4b
-WP5 naming. Implementation waits on review and the unified core from
-`04d-core-trace-task.md`.
+**Status:** first implementation landed in `IsoConserve.RateRouting` after the
+Review #7 task-file repairs. The module proves destination-sum rate conservation
+including stranded cycles, nonnegativity under `CoreWF.rate_nonneg`, one-waiter
+inheritance, memoryless return/no stored boost, share normalization, and exact
+Pathfinder `10/13` vs `3/13` rational shares. Remaining 04f follow-up: pin and
+prove the acyclic recursive-equation theorem with the needed fuel/live-intermediate
+premises, then rewire `Canonical.pythonRatePlan` to use derived `routedRate`
+weights instead of supplied weights.
 
 4. **4.3: effective rates from the wait graph.** The one reading with
    real unformalized mathematics. Define, on a wait relation restricted
@@ -496,6 +501,7 @@ questions, and implementation order after review.
 
    **Status:** WP1+WP2 implemented in `IsoConserve.CoreTrace` after Review #7's
    fixes to `04d-core-trace-task.md`; WP3 implemented in
-   `IsoConserve.DetectorProgress` after the 04g task-file repair. Next downstream
-   action is to revise the 04f approved-with-fixes task file against the shared
-   core before its code starts.
+   `IsoConserve.DetectorProgress` after the 04g task-file repair; WP5's conserved
+   destination-sum core is implemented in `IsoConserve.RateRouting`. Next downstream
+   action is the remaining 04f recursive-equation/canonical-wiring follow-up, or
+   the self-contained approved 04e PN-counter module.
