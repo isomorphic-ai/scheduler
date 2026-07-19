@@ -1,6 +1,6 @@
 # Lean Evidence Audit
 
-- Git HEAD: `82c3bf1`
+- Git HEAD: `a99dbed`
 - Report note: this records the tree at the Git HEAD above; rerun `tools/lean-evidence-audit` for the current HEAD.
 - Worktree dirty at audit run: `yes`
 - Build: `PASS`
@@ -8,8 +8,8 @@
 - Headline `#print axioms`: `PASS`
 - Allowed axiom baseline: `[propext, Classical.choice, Quot.sound]` and subsets only
 - Lean modules: `21`
-- Source lines under `IsoConserve/`: `6441`
-- Syntactic theorem/lemma declarations: `414`
+- Source lines under `IsoConserve/`: `6777`
+- Syntactic theorem/lemma declarations: `422`
 
 ## Build Log
 
@@ -95,6 +95,9 @@ No matches under `IsoConserve/`.
 'IsoConserve.ResolutionYield.canonical_discard_policy_livelocks_for_all_n' depends on axioms: [propext]
 'IsoConserve.ResolutionYield.positive_credit_gain_finite_requirement_eventually_completes' depends on axioms: [propext]
 'IsoConserve.RateRouting.routed_rate_conserved' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.RateRouting.effective_rate_eq_base_plus_waiters' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.RateRouting.transitive_rate_routing' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.RateRouting.multiple_waiters_sum_not_max' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.RateRouting.pathfinder_low_share_eq_ten_thirteenths' depends on axioms: [propext,
  Classical.choice,
  Quot.sound]
@@ -138,6 +141,9 @@ No matches under `IsoConserve/`.
  Quot.sound]
 'IsoConserve.PaperClaims.canonical_python_step_verified' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.PaperClaims.routed_rate_conserved' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.effective_rate_eq_base_plus_waiters' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.transitive_rate_routing' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.multiple_waiters_sum_not_max' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.PaperClaims.priority_inversion_cannot_form' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.PaperClaims.pathfinder_low_share_eq_ten_thirteenths' depends on axioms: [propext,
  Classical.choice,
@@ -209,7 +215,7 @@ IsoConserve/WaitGraph.lean
 | Noether slice | `IsoConserve.Noether.mixedRel_accounted_clockFree` | proved | uniqueness obstructed |
 | PaperClaims closure surface | `IsoConserve.PaperClaims.*` aliases for core trace, detector, resolution, routing, PN-counter, flexibility, Theorem 1, polarity, invariants | proved | theorem names are citation aliases; source modules define exact scope |
 | Unified core trace | `IsoConserve.CoreTrace.core_reachable_conserves_accounted`, `IsoConserve.CoreTrace.deadlock_exec_fixed`, `IsoConserve.CoreTrace.L4_stock_is_trace_integral` | proved | shared surface; full old-to-new simulation not proved |
-| Rate routing | `IsoConserve.RateRouting.routed_rate_conserved`, `IsoConserve.RateRouting.pathfinder_low_share_eq_ten_thirteenths`, `IsoConserve.RateRouting.no_stored_boost_state` | partial | destination-sum KCL, exact shares, and memoryless return proved; recursive equation/canonical wiring remain |
+| Rate routing | `IsoConserve.RateRouting.routed_rate_conserved`, `IsoConserve.RateRouting.effective_rate_eq_base_plus_waiters`, `IsoConserve.RateRouting.multiple_waiters_sum_not_max`, `IsoConserve.RateRouting.pathfinder_low_share_eq_ten_thirteenths`, `IsoConserve.RateRouting.no_stored_boost_state` | partial | destination-sum KCL, partition-certified recursive equation, sum-not-max, exact shares, and memoryless return proved; canonical wiring remains |
 | PN-counter distribution | `IsoConserve.PNCounter.merge_assoc`, `IsoConserve.PNCounter.eval_eq_globalRecorded`, `IsoConserve.PNCounter.off_partition_decrement_surfaces` | proved | honest per-node ledgers by max; no CAP/gossip/Byzantine theorem |
 | Detector/progress signal | `IsoConserve.DetectorProgress.detector_sound`, `IsoConserve.DetectorProgress.detection_latency_le_budget`, `IsoConserve.DetectorProgress.live_process_not_detected`, `IsoConserve.DetectorProgress.liar_fails_reputation_check` | proved | supplied component; selected-attempt schedule; honest signal plus reputation |
 | Resolution yield | `IsoConserve.ResolutionYield.resolution_yield_conserves`, `IsoConserve.ResolutionYield.yield_breaks_closed_component`, `IsoConserve.ResolutionYield.positive_credit_gain_finite_requirement_eventually_completes` | proved | supplied released-edge witness; Nat-unit toy termination |

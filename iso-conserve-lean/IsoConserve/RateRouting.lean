@@ -177,6 +177,31 @@ theorem sumFin_single {n : Nat} (x : Fin n) (a : Qty) :
           rw [ih x]
           grind
 
+theorem sumFin_pair {n : Nat} {x y : Fin n} (hxy : x ≠ y)
+    (a b : Qty) :
+    sumFin (fun r => if r = x then a else if r = y then b else 0) =
+      a + b := by
+  have hsplit :
+      sumFin (fun r => if r = x then a else if r = y then b else 0) =
+        sumFin (fun r => if r = x then a else 0) +
+          sumFin (fun r => if r = y then b else 0) := by
+    rw [← sumFin_add]
+    apply sumFin_congr
+    intro r
+    by_cases hx : r = x
+    · have hy : ¬ r = y := by
+        intro hry
+        exact hxy (hx.symm.trans hry)
+      simp [hx, hxy]
+      grind
+    · by_cases hy : r = y
+      · have hyx : ¬ y = x := Ne.symm hxy
+        simp [hy, hyx]
+        grind
+      · simp [hx, hy]
+        grind
+  rw [hsplit, sumFin_single x a, sumFin_single y b]
+
 theorem sumFin_option {n : Nat} (d : Option (Fin n)) (a : Qty) :
     sumFin (fun r => if d = some r then a else 0) =
       match d with | some _ => a | none => 0 := by
@@ -441,6 +466,232 @@ theorem reaches_waitsOn {n m : Nat}
       unfold reachesFuel
       exact Or.inr ⟨h, hwait, reachesFuel_refl s n h⟩
 
+def immediateWaiter {n m : Nat} (s : CoreState n m)
+    (w p : ProcId n) : Prop :=
+  waitsOn s w = some p
+
+def waitsTransitivelyOn {n m : Nat} (s : CoreState n m)
+    (w p : ProcId n) : Prop :=
+  reaches s w p /\ w ≠ p
+
+theorem transitive_rate_routing {n m : Nat}
+    {s : CoreState n m} {w p r : ProcId n} {fuel : Nat}
+    (hwait : waitsOn s w = some p)
+    (hlive : unfinished s w)
+    (hnotrun : ¬ runnable s w)
+    (hdest : destination s fuel p = some r) :
+    destination s (fuel + 1) w = some r := by
+  unfold destination
+  simp [hlive, hnotrun, hwait, hdest]
+
+structure WaiterPartitionAt {n m : Nat}
+    (s : CoreState n m) (p : ProcId n) : Prop where
+  split : forall x,
+    unfinished s x /\ reaches s x p <->
+      x = p \/
+        exists w,
+          immediateWaiter s w p /\ unfinished s x /\ reaches s x w
+  root_not_in_waiter_subtree :
+    forall w, immediateWaiter s w p -> ¬ reaches s p w
+  unique_waiter :
+    forall x w1 w2,
+      immediateWaiter s w1 p ->
+      immediateWaiter s w2 p ->
+      reaches s x w1 ->
+      reaches s x w2 ->
+      w1 = w2
+
+/-- The fuel-bounded acyclic hypothesis needed by the recursive equation.
+It packages the exact partition property for the upstream tree rooted at `p`.
+Cycles and over-fuel paths intentionally stay outside this recursive reading and
+are accounted by `strandedRate` in `routed_rate_conserved`. -/
+def acyclicFrom {n m : Nat} (s : CoreState n m) (p : ProcId n) : Prop :=
+  WaiterPartitionAt s p
+
+theorem effective_rate_contribution_eq_base_plus_waiters {n m : Nat}
+    {s : CoreState n m} {p x : ProcId n}
+    (hlivep : unfinished s p)
+    (hpart : WaiterPartitionAt s p) :
+    (if unfinished s x /\ reaches s x p then baseRate s x else 0) =
+      (if x = p then baseRate s p else 0) +
+        sumFin (fun w =>
+          if immediateWaiter s w p /\ unfinished s x /\ reaches s x w then
+            baseRate s x
+          else
+            0) := by
+  by_cases hxp : x = p
+  · subst x
+    have hp_reaches : reaches s p p := reaches_refl s p
+    have hleft : unfinished s p /\ reaches s p p := ⟨hlivep, hp_reaches⟩
+    have hsum0 :
+        sumFin (fun w : ProcId n =>
+          if immediateWaiter s w p /\ unfinished s p /\ reaches s p w then
+            baseRate s p
+          else
+            0) = 0 := by
+      calc
+        sumFin (fun w : ProcId n =>
+          if immediateWaiter s w p /\ unfinished s p /\ reaches s p w then
+            baseRate s p
+          else
+            0) =
+            sumFin (fun _ : ProcId n => (0 : Qty)) := by
+              apply sumFin_congr
+              intro w
+              by_cases hw :
+                  immediateWaiter s w p /\ unfinished s p /\ reaches s p w
+              · exact False.elim
+                  ((hpart.root_not_in_waiter_subtree w hw.1) hw.2.2)
+              · simp [hw]
+        _ = 0 := sumFin_zero
+    rw [hsum0]
+    simp [hlivep, reaches_refl]
+    grind
+  · by_cases hreach : unfinished s x /\ reaches s x p
+    · have hsplit := (hpart.split x).1 hreach
+      rcases hsplit with hx_eq | hwitness
+      · exact False.elim (hxp hx_eq)
+      · rcases hwitness with ⟨w0, hi0, _hu0, hr0⟩
+        have hsum :
+            sumFin (fun w : ProcId n =>
+              if immediateWaiter s w p /\ unfinished s x /\ reaches s x w then
+                baseRate s x
+              else
+                0) = baseRate s x := by
+          calc
+            sumFin (fun w : ProcId n =>
+              if immediateWaiter s w p /\ unfinished s x /\ reaches s x w then
+                baseRate s x
+              else
+                0) =
+                sumFin (fun w : ProcId n =>
+                  if w = w0 then baseRate s x else 0) := by
+                  apply sumFin_congr
+                  intro w
+                  by_cases hw : w = w0
+                  · subst hw
+                    simp [hi0, hreach.1, hr0]
+                  · have hno :
+                        ¬ (immediateWaiter s w p /\
+                          unfinished s x /\ reaches s x w) := by
+                      intro hbad
+                      exact hw
+                        (hpart.unique_waiter x w w0 hbad.1 hi0 hbad.2.2 hr0)
+                    simp [hw, hno]
+            _ = baseRate s x := sumFin_single w0 (baseRate s x)
+        rw [hsum]
+        simp [hxp, hreach]
+        grind
+    · have hsum0 :
+        sumFin (fun w : ProcId n =>
+          if immediateWaiter s w p /\ unfinished s x /\ reaches s x w then
+            baseRate s x
+          else
+            0) = 0 := by
+        calc
+          sumFin (fun w : ProcId n =>
+            if immediateWaiter s w p /\ unfinished s x /\ reaches s x w then
+              baseRate s x
+            else
+              0) =
+              sumFin (fun _ : ProcId n => (0 : Qty)) := by
+                apply sumFin_congr
+                intro w
+                by_cases hw :
+                    immediateWaiter s w p /\ unfinished s x /\ reaches s x w
+                · have hreach' : unfinished s x /\ reaches s x p :=
+                    (hpart.split x).2
+                      (Or.inr ⟨w, hw.1, hw.2.1, hw.2.2⟩)
+                  exact False.elim (hreach hreach')
+                · simp [hw]
+          _ = 0 := sumFin_zero
+      rw [hsum0]
+      simp [hxp, hreach]
+      grind
+
+theorem effective_rate_eq_base_plus_waiters {n m : Nat}
+    {s : CoreState n m} {p : ProcId n}
+    (hlivep : unfinished s p)
+    (hacyclic : acyclicFrom s p) :
+    effectiveRate s p =
+      baseRate s p +
+        sumFin (fun w =>
+          if immediateWaiter s w p then effectiveRate s w else 0) := by
+  unfold acyclicFrom at hacyclic
+  unfold effectiveRate
+  calc
+    sumFin (fun x : ProcId n =>
+        if unfinished s x /\ reaches s x p then baseRate s x else 0) =
+        sumFin (fun x : ProcId n =>
+          (if x = p then baseRate s p else 0) +
+            sumFin (fun w : ProcId n =>
+              if immediateWaiter s w p /\ unfinished s x /\ reaches s x w then
+                baseRate s x
+              else
+                0)) := by
+          apply sumFin_congr
+          intro x
+          exact effective_rate_contribution_eq_base_plus_waiters
+            hlivep hacyclic
+    _ =
+        sumFin (fun x : ProcId n => if x = p then baseRate s p else 0) +
+          sumFin (fun x : ProcId n =>
+            sumFin (fun w : ProcId n =>
+              if immediateWaiter s w p /\ unfinished s x /\ reaches s x w then
+                baseRate s x
+              else
+                0)) := by
+          rw [sumFin_add]
+    _ =
+        baseRate s p +
+          sumFin (fun x : ProcId n =>
+            sumFin (fun w : ProcId n =>
+              if immediateWaiter s w p /\ unfinished s x /\ reaches s x w then
+                baseRate s x
+              else
+                0)) := by
+          rw [sumFin_single p (baseRate s p)]
+    _ =
+        baseRate s p +
+          sumFin (fun w : ProcId n =>
+            sumFin (fun x : ProcId n =>
+              if immediateWaiter s w p /\ unfinished s x /\ reaches s x w then
+                baseRate s x
+              else
+                0)) := by
+          rw [sumFin_swap]
+    _ =
+        baseRate s p +
+          sumFin (fun w : ProcId n =>
+            if immediateWaiter s w p then
+              sumFin (fun x : ProcId n =>
+                if unfinished s x /\ reaches s x w then baseRate s x else 0)
+            else
+              0) := by
+          apply congrArg (fun z => baseRate s p + z)
+          apply sumFin_congr
+          intro w
+          by_cases hi : immediateWaiter s w p
+          · simp [hi]
+          · have hsum0 :
+              sumFin (fun x : ProcId n =>
+                if immediateWaiter s w p /\ unfinished s x /\ reaches s x w then
+                  baseRate s x
+                else
+                  0) = 0 := by
+              calc
+                sumFin (fun x : ProcId n =>
+                  if immediateWaiter s w p /\ unfinished s x /\ reaches s x w then
+                    baseRate s x
+                  else
+                    0) =
+                    sumFin (fun _ : ProcId n => (0 : Qty)) := by
+                      apply sumFin_congr
+                      intro x
+                      simp [hi]
+                _ = 0 := sumFin_zero
+            simpa [hi] using hsum0
+
 theorem blocked_rate_reaches_holder {n m : Nat}
     {s : CoreState n m} {w h : ProcId n}
     (hwait : waitsOn s w = some h)
@@ -491,6 +742,56 @@ theorem blocked_rate_reaches_root {n m : Nat}
     (hwf : CoreWF s) :
     baseRate s w <= routedRate s r :=
   base_rate_goes_to_destination hlive hroute hwf
+
+theorem multiple_waiters_sum_not_max {n m : Nat}
+    {s : CoreState n m} {w1 w2 h : ProcId n}
+    (hw1 : waitsOn s w1 = some h)
+    (hw2 : waitsOn s w2 = some h)
+    (hlive1 : unfinished s w1)
+    (hlive2 : unfinished s w2)
+    (hne : w1 ≠ w2)
+    (hwf : CoreWF s) :
+    baseRate s w1 + baseRate s w2 <= effectiveRate s h := by
+  unfold effectiveRate
+  let f : ProcId n -> Qty :=
+    fun x => if unfinished s x /\ reaches s x h then baseRate s x else 0
+  have hle :
+      sumFin (fun x : ProcId n =>
+        if x = w1 then baseRate s w1
+        else if x = w2 then baseRate s w2
+        else 0) <=
+        sumFin f := by
+    apply sumFin_le
+    intro x
+    by_cases hx1 : x = w1
+    · subst x
+      have hr : reaches s w1 h := reaches_waitsOn hw1
+      simp [f, hlive1, hr]
+    · by_cases hx2 : x = w2
+      · subst x
+        have hr : reaches s w2 h := reaches_waitsOn hw2
+        simp [f, hx1, hlive2, hr]
+      · have hnonneg : 0 <= f x := by
+          unfold f
+          by_cases hx : unfinished s x /\ reaches s x h
+          · simp [hx]
+            exact hwf.rate_nonneg x
+          · simp [hx]
+        simp [hx1, hx2, hnonneg]
+  have hpair :
+      sumFin (fun x : ProcId n =>
+        if x = w1 then baseRate s w1
+        else if x = w2 then baseRate s w2
+        else 0) =
+        baseRate s w1 + baseRate s w2 :=
+    sumFin_pair hne (baseRate s w1) (baseRate s w2)
+  calc
+    baseRate s w1 + baseRate s w2 =
+        sumFin (fun x : ProcId n =>
+          if x = w1 then baseRate s w1
+          else if x = w2 then baseRate s w2
+          else 0) := hpair.symm
+    _ <= sumFin f := hle
 
 def removeWaitEdge {n m : Nat}
     (s : CoreState n m) (w _h : ProcId n) : CoreState n m :=

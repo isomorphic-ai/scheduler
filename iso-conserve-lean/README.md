@@ -171,13 +171,22 @@ ordinary-execution/cure distinction visible.
   `blocked_rate_reaches_holder`, `blocked_rate_reaches_root`,
   `base_rate_goes_to_destination`, and `trapped_rate_goes_to_stranded` are the
   current inheritance/downstream accounting lemmas.
+  `effective_rate_eq_base_plus_waiters` proves the paper's recursive equation
+  under the explicit `acyclicFrom`/`WaiterPartitionAt` certificate: the upstream
+  waiters form a disjoint finite tree rooted at the evaluated process. That
+  certificate is the fuel-bounded acyclic premise; cyclic/over-fuel claims remain
+  in `strandedRate` under the KCL theorem. `transitive_rate_routing` proves the
+  one-edge destination-following step, and `multiple_waiters_sum_not_max` proves
+  that two distinct live waiters contribute the sum of their base rates, not the
+  maximum.
   `remove_wait_edge_restores_base_rate` and `no_stored_boost_state` prove the
   memoryless-return surface: rates are derived from the current graph, not stored
   as boost state. `shares_sum_quantum` proves runnable shares sum back to the
   quantum when the routed-rate denominator is positive. The canonical Pathfinder
   witness is exact over rationals: `pathfinder_low_share_eq_ten_thirteenths`,
   `pathfinder_medium_share_eq_three_thirteenths`, and
-  `canonical_priority_inversion_cannot_form`.
+  `canonical_priority_inversion_cannot_form`. The remaining bridge is wiring these
+  derived routed weights into the old `Canonical.pythonRatePlan` API.
 - PN-counter distribution 04e:
   `IsoConserve.PNCounter.merge_idem`, `merge_comm`, and `merge_assoc` prove the
   merge ACI surface for the pointwise-max ledger join, with `le_merge_left`,
@@ -215,7 +224,9 @@ detector/progress aliases such as `PaperClaims.detector_sound`,
 `PaperClaims.progress_signal_spinner_reclaimed`; resolution/routing/distribution
 aliases such as `PaperClaims.resolution_yield_loses_no_work`,
 `PaperClaims.routed_rate_conserved`, `PaperClaims.priority_inversion_cannot_form`,
-`PaperClaims.pn_counter_merge_converges`, and `PaperClaims.pn_counter_debt_surfaces`;
+`PaperClaims.effective_rate_eq_base_plus_waiters`,
+`PaperClaims.multiple_waiters_sum_not_max`, `PaperClaims.pn_counter_merge_converges`,
+and `PaperClaims.pn_counter_debt_surfaces`;
 plus the finite-action Theorem 1 aliases
 `PaperClaims.hoarding_is_self_defeating` and
 `PaperClaims.selfish_optima_eq_generous_optima`.
