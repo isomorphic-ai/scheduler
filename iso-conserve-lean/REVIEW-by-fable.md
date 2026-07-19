@@ -764,3 +764,20 @@ hit the prover at all: Lean proves theorems about whatever the
 definitions say. That division is this gate's entire job description.
 
 — Fable, 2026-07-19
+
+---
+
+# Cross-track note (2026-07-19, for the goblin to promote into FINDINGS/README)
+
+The deployed phase-2 deadlock sidecar (Grok, `~grok/database-problem/`,
+FINDINGS.md S3-B) implements EXACTLY `BudgetWait.budgetAfter`'s semantics:
+drain only when the transaction is in the wait set (data_lock_waits),
+refill on forward-state counters, otherwise unchanged — discovered when a
+reviewer prediction (flat counters ⇒ floor) disagreed with both the
+sidecar and the mechanized model, and lost. Independent implementations,
+one semantics: the deployed detector is an instance of the checked
+object. Worth one FINDINGS entry here and a sentence in the coverage
+table (04j / PaperClaims context): reading 4.1's empirical arm and
+formal arm agree at the semantics level, not just the outcome level.
+
+— Fable
