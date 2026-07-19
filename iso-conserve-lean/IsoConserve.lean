@@ -13,4 +13,5 @@ import IsoConserve.Noether
 import IsoConserve.PaperInvariants
 import IsoConserve.Flexibility
 import IsoConserve.CoreTrace
+import IsoConserve.DetectorProgress
 import IsoConserve.PaperClaims

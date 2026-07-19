@@ -134,6 +134,22 @@ ordinary-execution/cure distinction visible.
   `CoreTrace.L4_stock_is_trace_integral`, and
   `CoreTrace.cached_integral_eq_trace_integral` provide the trace-derived L4
   surface via `flowIntegral`.
+- Unified detector/progress WP3:
+  `IsoConserve.DetectorProgress.conversion_refills_budget`,
+  `blocked_nonconversion_drains_budget`, `budget_drop_implies_blocked`, and
+  `budget_after_ge_pred` lift the one-attempt detector budget facts to the
+  shared `CoreState`.
+  `IsoConserve.DetectorProgress.detector_sound` proves a supplied nonempty
+  closed and floored component is a genuine deadlock witness.
+  `periodic_conversion_never_floors` and `live_process_not_detected` prove the
+  slow-live safety direction for schedule prefixes when the process starts at
+  full budget and converts on each selected attempt.
+  `closed_deadlock_eventually_floors`, `deadlock_eventually_detected`, and
+  `detection_latency_le_budget` prove bounded detection by per-member selection
+  counts. The `SIG_PROGRESS` submodel is covered by
+  `useful_reporter_never_reclaimed`, `spinner_eventually_reclaimed`,
+  `liar_survives_in_loop_if_it_reports_progress`, and
+  `liar_fails_reputation_check`.
 
 ## Paper Claims Surface
 
@@ -344,6 +360,41 @@ least every member's starting budget, and
 in bridge steps, not wall-clock time.
 
 V3 still deliberately omits lock acquisition and automatic cycle discovery.
+
+## Detector/Progress WP3
+
+`IsoConserve.DetectorProgress` is the 04g lift of the detector bridge to the
+unified `CoreTrace.CoreState`. A scheduled attempt observes one process: conversion
+spends one unit of stock and refills its Nat detector budget to `budgetCap`;
+blocked non-conversion drains the budget by one with truncated subtraction; and an
+unblocked non-converting attempt leaves the budget unchanged. `runSchedule` is the
+only driver used by the headline theorems.
+
+The no-false-positive theorem is `detector_sound`: a supplied candidate component
+that is closed in the current lock graph, floored, and nonempty packages as
+`GenuineDeadlock`. The floor is detector evidence, but closure is the structural
+reason the component is genuinely blocked; the budget-window theorems are what make
+the floor evidence meaningful across a schedule.
+
+Bounded completeness is stated in selected attempts. If every member of a closed
+component is selected at least `k` times and every member starts with budget at most
+`k`, then `closed_deadlock_eventually_floors` and
+`deadlock_eventually_detected` show the component is caught after that schedule.
+`detection_latency_le_budget` exposes the same result as a prefix-existence
+statement. It does not claim automatic cycle discovery.
+
+Slow-live safety is deliberately stronger than the prose minimum:
+`convertsWithinEverySelectionWindow` says the process converts whenever it is
+selected in every checked schedule prefix. With initial `budget = budgetCap` and
+positive cap, `periodic_conversion_never_floors` proves the budget is nonzero on
+every prefix, and `live_process_not_detected` shows any component containing that
+process cannot fire.
+
+The progress signal is an honest self-reporting channel, not Byzantine enforcement.
+A rising report refills budget and is trusted by the in-loop detector
+(`liar_survives_in_loop_if_it_reports_progress`); the separate reputation predicate
+catches reported progress that exceeds delivered progress
+(`liar_fails_reputation_check`).
 
 ## What The Plan Abstraction Covers
 
