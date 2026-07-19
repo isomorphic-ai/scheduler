@@ -23,6 +23,16 @@ Do **not** implement this before the unified core from `04d` and the detector
 surface from `04g` have been reviewed. This task needs the same lock/wait graph,
 control state, budget, converted work, and credit ledger in one state.
 
+Implement the Lean surface in:
+
+```lean
+namespace IsoConserve.ResolutionYield
+```
+
+The process and state records are owned by `IsoConserve.CoreTrace`. This task may
+define aliases such as `creditUnits`, but it must not introduce a second
+`CoreProc`/`CoreState` shape.
+
 Do **not** present the existing `YieldPlan` theorem as the full §4.2 result.
 `YieldPlan` proves the conservation core for stock-to-credit banking. This task
 must additionally model restart-local converted work, lock release, restart control,
@@ -75,10 +85,11 @@ restart-local work. If `04d` still has only one `converted` field, revise the co
 before this task lands rather than encoding restart semantics in theorem
 hypotheses.
 
-Suggested shape:
+The shape is the one already supplied by 04d:
 
 ```lean
 structure CoreProc (m : Nat) where
+  baseRate : Qty
   stock : Qty
   credit : Qty
   convertedTotal : Nat
@@ -86,6 +97,8 @@ structure CoreProc (m : Nat) where
   workNeeded : Nat
   pc : Nat
   wants : Option (LockId m)
+  budget : Nat
+  budgetCap : Nat
   done : Bool
 ```
 
@@ -120,11 +133,17 @@ Required behavior:
 
 - bank `convertCost * convertedSinceRestart y` into `credit y`;
 - reset the restart-local progress/control path for `y`;
-- release every lock held by `y`;
+- release every lock held by `y`, leaving those locks unheld by `y` after this
+  step;
 - clear or rewind `wants y` according to the core's restart semantics;
-- set `budget y = budgetCap y + creditUnits y` or the Q-equivalent;
+- set `budget y = budgetCap y + creditUnits y`, where `creditUnits` is a Nat
+  progress-unit view of banked restart work;
 - leave unrelated processes' accounted values unchanged except for wake effects
   caused by released locks.
+
+`resolutionYield` is release-without-instant-regrant. Lock acquisition after the
+yield is a separate ordinary execution step; the cure step itself must not release
+and reacquire the same lock in one transition.
 
 Required one-step theorems:
 
@@ -151,9 +170,9 @@ structure ReleaseWitness (s : CoreState n m) (C : ProcId n -> Bool)
     (y w : ProcId n) (l : LockId m) : Prop where
   y_in : C y = true
   w_in : C w = true
-  y_holds : holds s y l = true
-  w_wants : wants s w = some l
-  w_ne_y : w != y
+  y_holds : s.holds y l = true
+  w_wants : (s.procs w).wants = some l
+  w_ne_y : w ≠ y
 ```
 
 Required theorem:
@@ -201,7 +220,9 @@ The stronger "no victim" result is accounting, not psychology:
 
 ```lean
 theorem no_victim_accounted_progress_preserved
-    resolution_yield_loses_no_accounted_work ...
+    (hyield : s' = resolutionYield s y) :
+    procAccounted s'.convertCost (s'.procs y) =
+      procAccounted s.convertCost (s.procs y)
 ```
 
 ---
@@ -211,6 +232,11 @@ theorem no_victim_accounted_progress_preserved
 Define a small deterministic comparison model, not a full scheduler:
 
 ```lean
+structure ToyState where
+  remaining : Nat
+  banked : Nat
+  atContention : Bool
+
 def creditPolicyStep : ToyState -> ToyState
 def discardPolicyStep : ToyState -> ToyState
 ```
@@ -220,7 +246,7 @@ Required theorems:
 ```lean
 theorem canonical_credit_policy_completes_in_two_yields
 theorem canonical_discard_policy_returns_to_same_contention
-theorem canonical_discard_policy_livelocks_for_all_n
+theorem canonical_discard_policy_livelocks_for_all_n (n : Nat)
 ```
 
 The discard theorem can be stated as a state-space cycle:
@@ -246,14 +272,18 @@ Prove the general theorem if the toy comparison goes cleanly:
 
 ```lean
 theorem positive_credit_gain_finite_requirement_eventually_completes
-    (hgain : forall j, beforeComplete j -> 0 < creditGainAt j)
+    (hgain : forall j, beforeComplete j -> 1 <= creditGainUnitsAt j)
     (hbound : finiteRemainingRequirement s0) :
     exists k, completes (stepN k s0)
 ```
 
-This should be a variant-function argument: banked credit strictly increases while
-the remaining requirement is finite. If the exact scheduler semantics make this
-too broad, keep the theorem in the toy model and document the boundary.
+This should be a variant-function argument over Nat progress units, not arbitrary
+positive rationals. Review #7 found the rational version Zeno-false: geometrically
+shrinking positive gains can increase credit forever without completing. The proof
+must use the mechanism link supplied by `restart_has_base_plus_credit`: each
+positive unit of banked restart work funds a strictly longer restart attempt
+against finite `workNeeded`. If the exact scheduler semantics make this too broad,
+keep the theorem in the toy model and document the boundary.
 
 ---
 
@@ -294,6 +324,8 @@ Update `FINDINGS.md` for any sharpening. Likely candidates:
    by `IsoConserve.lean`.
 5. README and FINDINGS cite exact theorem names and boundaries.
 6. The credit-vs-discard comparison is theorem-level, not only an engine trace.
+7. The Review #7 repair commit for this task file precedes the implementation
+   commit.
 
 ---
 
