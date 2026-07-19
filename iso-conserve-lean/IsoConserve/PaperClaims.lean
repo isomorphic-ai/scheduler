@@ -203,6 +203,41 @@ theorem routed_rate_conserved {n m : Nat}
       RateRouting.liveBaseRate s :=
   RateRouting.routed_rate_conserved s hwf
 
+theorem effective_rate_eq_base_plus_waiters {n m : Nat}
+    {s : CoreTrace.CoreState n m} {p : CoreTrace.ProcId n}
+    (hlivep : CoreTrace.unfinished s p)
+    (hacyclic : RateRouting.acyclicFrom s p) :
+    RateRouting.effectiveRate s p =
+      RateRouting.baseRate s p +
+        sumFin (fun w =>
+          if RateRouting.immediateWaiter s w p then
+            RateRouting.effectiveRate s w
+          else
+            0) :=
+  RateRouting.effective_rate_eq_base_plus_waiters hlivep hacyclic
+
+theorem transitive_rate_routing {n m : Nat}
+    {s : CoreTrace.CoreState n m} {w p r : CoreTrace.ProcId n}
+    {fuel : Nat}
+    (hwait : RateRouting.waitsOn s w = some p)
+    (hlive : CoreTrace.unfinished s w)
+    (hnotrun : ¬ CoreTrace.runnable s w)
+    (hdest : RateRouting.destination s fuel p = some r) :
+    RateRouting.destination s (fuel + 1) w = some r :=
+  RateRouting.transitive_rate_routing hwait hlive hnotrun hdest
+
+theorem multiple_waiters_sum_not_max {n m : Nat}
+    {s : CoreTrace.CoreState n m} {w1 w2 h : CoreTrace.ProcId n}
+    (hw1 : RateRouting.waitsOn s w1 = some h)
+    (hw2 : RateRouting.waitsOn s w2 = some h)
+    (hlive1 : CoreTrace.unfinished s w1)
+    (hlive2 : CoreTrace.unfinished s w2)
+    (hne : w1 ≠ w2)
+    (hwf : CoreTrace.CoreWF s) :
+    RateRouting.baseRate s w1 + RateRouting.baseRate s w2 <=
+      RateRouting.effectiveRate s h :=
+  RateRouting.multiple_waiters_sum_not_max hw1 hw2 hlive1 hlive2 hne hwf
+
 theorem priority_inversion_cannot_form :
     RateRouting.share RateRouting.pathfinderState 1 RateRouting.low >=
       RateRouting.share RateRouting.pathfinderState 1 RateRouting.medium :=

@@ -302,10 +302,12 @@ member's starting budget floors the closed component.
 Review #7 task-file repairs. The module proves destination-sum rate conservation
 including stranded cycles, nonnegativity under `CoreWF.rate_nonneg`, one-waiter
 inheritance, memoryless return/no stored boost, share normalization, and exact
-Pathfinder `10/13` vs `3/13` rational shares. Remaining 04f follow-up: pin and
-prove the acyclic recursive-equation theorem with the needed fuel/live-intermediate
-premises, then rewire `Canonical.pythonRatePlan` to use derived `routedRate`
-weights instead of supplied weights.
+Pathfinder `10/13` vs `3/13` rational shares. The acyclic recursive-equation
+theorem now lands as `effective_rate_eq_base_plus_waiters` under the explicit
+`WaiterPartitionAt`/`acyclicFrom` certificate, with `multiple_waiters_sum_not_max`
+covering the sum-not-max divergence. Remaining 04f follow-up: rewire
+`Canonical.pythonRatePlan` to use derived `routedRate` weights instead of supplied
+weights.
 
 4. **4.3: effective rates from the wait graph.** The one reading with
    real unformalized mathematics. Define, on a wait relation restricted

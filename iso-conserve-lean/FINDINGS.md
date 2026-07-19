@@ -294,18 +294,23 @@
    coverage table as implementation alignment for reading 4.1, not as a new Lean
    theorem.
 
-31. Rate routing's conserved core is destination-sum first; recursion is a follow-up.
+31. Rate routing's conserved core is destination-sum first; recursion is certificate-scoped.
 
    `IsoConserve.RateRouting` proves the Review #7-repaired KCL theorem
    `routed_rate_conserved`: every unfinished process's nonnegative `baseRate` is
    counted exactly once, either at a runnable routed destination or in
    `strandedRate` when the wait-chain does not reach one. The module also proves
    exact Pathfinder shares (`10/13` for low, `3/13` for medium), memoryless return
-   (`remove_wait_edge_restores_base_rate`, `no_stored_boost_state`), and share
-   normalization (`shares_sum_quantum`). The task-file sketch's recursive
-   effective-rate equation and canonical `pythonRatePlan` wiring are not yet
-   landed; they need the acyclic/fuel/live-intermediate premises pinned rather
-   than silently inferred from the destination-sum theorem.
+   (`remove_wait_edge_restores_base_rate`, `no_stored_boost_state`), share
+   normalization (`shares_sum_quantum`), one-edge transitive routing
+   (`transitive_rate_routing`), and the sum-not-max corollary
+   (`multiple_waiters_sum_not_max`). The paper's recursive equation is now proved
+   as `effective_rate_eq_base_plus_waiters` under an explicit
+   `WaiterPartitionAt`/`acyclicFrom` certificate: the evaluated upstream region is
+   a disjoint finite waiter tree, and the process itself is live. That certificate
+   is the formal repair for the acyclic/fuel/live-intermediate premises; cyclic or
+   over-fuel parts belong to `strandedRate`. The remaining 04f bridge is canonical
+   `pythonRatePlan` wiring from these derived weights, not the recursion theorem.
 
 32. PN-counter distribution conserves per-node ledgers by max, not replica values by sum.
 
