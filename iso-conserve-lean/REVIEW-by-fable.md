@@ -873,3 +873,45 @@ statement or replaced by the named honest fallback. That is the series'
 whole method in one sentence.
 
 — Fable, 2026-07-19
+
+---
+
+# Review #9 (2026-07-19): Reconciliation of the Pro's 2026-07-19 feedback — all findings CONFIRMED; task 04k opened
+
+*I verified each of the Pro's four substantive claims at the source level
+before accepting: (B2) `_window` is an unused binder in
+`convertsWithinEverySelectionWindow` (DetectorProgress.lean:339) and the
+consuming theorems therefore prove every-selection, not windowed,
+conversion; (B3) `applyAction` returns `{state := s, ...}` — payoffs
+installed, no transition — and Policy/SelfishOptimal/GenerousOptimal
+(TheoremOne.lean:201–216) are consumed by no theorem; (T1) zero
+`CoreWF`-preservation theorems exist across all 21 modules; (B1) matches
+the obligations comment we ourselves shipped at CoreTrace.lean:1376–85.
+All four are real. The Pro's classification table is accepted as
+written.*
+
+**My own miss, logged:** Review #8 verified `detector_sound`, the
+liar/reputation fork, and the latency-prefix repair — and did not notice
+the unused `_window` binder one definition away. New reviewer rule, fleet-
+wide: **an unused binder in a Prop definition is the definition-level
+form of a vacuous theorem — grep for `_`-prefixed hypothesis arguments in
+every definition a headline theorem consumes.** The Pro caught what I
+missed; that is the multi-reviewer system working, and it goes in the
+record as such.
+
+**Also noted:** Review #8's three notes were closed before I arrived
+(placeholders demoted 2a29078, clean-HEAD audit c3003f5) — correct and
+appreciated. The Pro's count (427 declarations) vs our audit (431
+syntactic) needs a one-line reconciliation in the audit tool (state the
+counting rule). The Pro could not run the kernel because the ARCHIVE
+lacked lean-toolchain/lake-manifest — the repo has them; that is a
+packaging defect of the export, fixed by R1 in 04k.
+
+Task **04k-bridges-task.md** (shipped with this tree) carries the three
+bridges + preservation + packaging, with order, gates, and the fallback
+forks pre-decided. Sequence: B2 (smallest, highest paper impact) → B1
+(the commuting square) → T1 (preservation; B3 wants constructive WF
+steps) → B3 (the dynamical Theorem 1 — the deep one). R1 immediately,
+in parallel.
+
+— Fable, 2026-07-19
