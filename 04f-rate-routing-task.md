@@ -22,16 +22,10 @@ reviewed and the core state/event vocabulary has landed. This task is drafted no
 so the target is explicit; its Lean module should be built against the new core,
 not against the old split `Basic`/`WaitGraph` surface.
 
-Tentative module path after the core lands:
+Implement the Lean surface in:
 
-```text
-iso-conserve-lean/IsoConserve/RateRouting.lean
-```
-
-or, if `04d` creates a `Core/` folder:
-
-```text
-iso-conserve-lean/IsoConserve/Core/RateRouting.lean
+```lean
+namespace IsoConserve.RateRouting
 ```
 
 Do **not** perturb `monotone_under_adversary`.
@@ -113,6 +107,10 @@ If multiple holders are possible, either prove this task for a `UniqueHolder`
 well-formed subcase, or generalize `waitsOn` to a finite predecessor relation. Do
 not fake uniqueness if the core state does not provide it.
 
+Nonnegativity theorems must quantify over `CoreWF s` (or an explicit
+`forall p, 0 <= baseRate s p`) because `Qty = Rat`; negative base rates make
+`routedRate_nonneg`, `strandedRate_nonneg`, and the inheritance inequalities false.
+
 ---
 
 ## 3. Destination, Routed Rate, And Stranded Rate
@@ -132,6 +130,10 @@ Intended behavior:
 - if the search exhausts `fuel`, destination returns `none`;
 - use `fuel = n` (or a proved sufficient bound) for public definitions.
 
+Done processes carry no live rate claim in this module. Define a live claim as
+`unfinished s p`, and restrict routed/stranded/base sums to live claims instead of
+requiring a separate `baseRate = 0` invariant for done processes.
+
 Then define the final destination and final root share:
 
 ```lean
@@ -142,10 +144,14 @@ def trapped (s : CoreState n m) (p : ProcId n) : Prop :=
   destination s n p = none
 
 def routedRate (s : CoreState n m) (r : ProcId n) : Qty :=
-  sumFin (fun p => if destination s n p = some r then baseRate s p else 0)
+  sumFin (fun p =>
+    if unfinished s p /\ destination s n p = some r then baseRate s p else 0)
 
 def strandedRate (s : CoreState n m) : Qty :=
-  sumFin (fun p => if trapped s p then baseRate s p else 0)
+  sumFin (fun p => if unfinished s p /\ trapped s p then baseRate s p else 0)
+
+def liveBaseRate (s : CoreState n m) : Qty :=
+  sumFin (fun p => if unfinished s p then baseRate s p else 0)
 ```
 
 This representation handles both ordinary roots and cycles: acyclic wait chains
@@ -156,11 +162,13 @@ Also define the intermediate accumulation relation used by the paper's recursive
 equation:
 
 ```lean
-def reaches (s : CoreState n m) (from to : ProcId n) : Prop := ...
+def reaches (s : CoreState n m) (src dst : ProcId n) : Prop := ...
 
 def effectiveRate (s : CoreState n m) (p : ProcId n) : Qty :=
   sumFin (fun w => if reaches s w p then baseRate s w else 0)
 ```
+
+`reaches` must be reflexive and must use the same successor relation as `waitsOn`.
 
 `effectiveRate s p` is the rate accumulated at node `p` before it is forwarded
 again. `routedRate s r` is the final rate delivered to runnable root `r`. For a
@@ -192,10 +200,10 @@ Required theorem:
 
 ```lean
 theorem routed_rate_conserved
-    (s : CoreState n m) :
+    (s : CoreState n m) (hwf : CoreWF s) :
     sumFin (fun r =>
       if runnable s r then routedRate s r else 0) + strandedRate s =
-    sumFin (fun p => baseRate s p)
+    liveBaseRate s
 ```
 
 This is the finite KCL theorem for priority flow: urgency is routed or stranded,
@@ -226,6 +234,10 @@ def immediateWaiter (s : CoreState n m) (w p : ProcId n) : Prop :=
 
 def acyclicFrom (s : CoreState n m) (p : ProcId n) : Prop := ...
 ```
+
+`acyclicFrom p` is the right hypothesis: it rules out cycles downstream from `p`,
+where the recursive equation tries to evaluate. Do not strengthen it to global or
+upstream acyclicity.
 
 Required theorem:
 
@@ -260,21 +272,20 @@ The divergence from classical priority inheritance must be explicit:
 ```lean
 theorem blocked_rate_reaches_holder
     (hwait : waitsOn s w = some h)
-    (hbase_nonneg : 0 <= baseRate s w) :
+    (hwf : CoreWF s) :
     baseRate s w <= effectiveRate s h
 
 theorem blocked_rate_reaches_root
     (hwait : waitsOn s w = some h)
     (hdest : destination s n h = some r)
-    (hbase_nonneg : 0 <= baseRate s w) :
+    (hwf : CoreWF s) :
     baseRate s w <= routedRate s r
 
 theorem multiple_waiters_sum_not_max
     (hw1 : waitsOn s w1 = some h)
     (hw2 : waitsOn s w2 = some h)
-    (hne : w1 != w2)
-    (h1 : 0 <= baseRate s w1)
-    (h2 : 0 <= baseRate s w2) :
+    (hne : w1 ≠ w2)
+    (hwf : CoreWF s) :
     baseRate s w1 + baseRate s w2 <= effectiveRate s h
 ```
 
@@ -289,7 +300,10 @@ def share (s : CoreState n m) (quantum : Qty) (p : ProcId n) : Qty :=
     sumFin (fun r => if runnable s r then routedRate s r else 0)
 
 theorem canonical_priority_inversion_cannot_form :
-  ...
+    pathfinder_high_waits_on_low ->
+    pathfinder_low_runnable ->
+    pathfinder_medium_runnable ->
+    share pathfinderState 1 low >= share pathfinderState 1 medium
 ```
 
 The theorem should capture the Mars-Pathfinder shape:
@@ -315,6 +329,8 @@ theorem pathfinder_low_share_gt_medium :
 ```
 
 These are the Lean form of the paper's displayed "0.77 vs 0.23" engine result.
+Cite `iso_flow.py`'s FLOW scenario with base rates `1/9/3`; the exact shares are
+`10/13` for low and `3/13` for medium.
 
 ---
 
@@ -332,7 +348,8 @@ Required theorems:
 ```lean
 theorem remove_wait_edge_restores_base_rate
     (honly : noOtherWaiters s h)
-    (hwait : waitsOn s w = some h) :
+    (hwait : waitsOn s w = some h)
+    (hrunnable : runnable (removeWaitEdge s w h) h) :
     routedRate (removeWaitEdge s w h) h = baseRate s h
 
 theorem no_stored_boost_state
@@ -341,8 +358,10 @@ theorem no_stored_boost_state
     forall p, routedRate s p = routedRate t p
 ```
 
-The second theorem is the stronger statement: rate has no history. If the graph and
-base rates match, effective rates match.
+The second theorem is the stronger statement: rate has no history. `sameWaitGraph`
+must include `blockedOn`/`waitsOn`, `runnable`, and `unfinished`/`done`, not just
+raw wait edges. If the graph predicates and base rates match, effective rates
+match.
 
 ---
 
@@ -406,6 +425,8 @@ law is the destination/stranded conservation theorem.
 5. README and FINDINGS name theorem-level coverage and boundaries.
 6. The canonical `10/13` vs `3/13` example is a theorem over rationals, not a
    floating-point check.
+7. The Review #7 repair commit for this task file precedes the implementation
+   commit.
 
 ---
 
