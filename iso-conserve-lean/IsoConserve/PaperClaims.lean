@@ -349,7 +349,7 @@ theorem flexibility_collapse_whole_invariant
     Flexibility.whole (Flexibility.collapse s plan) = Flexibility.whole s :=
   collapse_whole_invariant s plan
 
-theorem hoarding_is_self_defeating {n m : Nat}
+theorem local_hoarding_is_self_defeating {n m : Nat}
     {s : CoreTrace.CoreState n m} {i j : CoreTrace.ProcId n} {q : Qty}
     (hq : 0 < q)
     (hstranded : TheoremOne.StrandedClaim s i q)
@@ -361,7 +361,7 @@ theorem hoarding_is_self_defeating {n m : Nat}
         (TheoremOne.applyAction s (TheoremOne.Action.hoard i q)) :=
   TheoremOne.hoarding_is_self_defeating hq hstranded hcan hreturn
 
-theorem selfish_optima_eq_generous_optima {n m : Nat}
+theorem local_selfish_optima_eq_generous_optima {n m : Nat}
     {s : CoreTrace.CoreState n m} {i j : CoreTrace.ProcId n} {q : Qty}
     (hstranded : TheoremOne.StrandedClaim s i q)
     (hcan : TheoremOne.CanConvertQty s j q)
@@ -369,6 +369,48 @@ theorem selfish_optima_eq_generous_optima {n m : Nat}
     TheoremOne.SelfishBestInClaimSet s i j q TheoremOne.ClaimChoice.route /\
       TheoremOne.GenerousBestInClaimSet s i j q TheoremOne.ClaimChoice.route :=
   TheoremOne.selfish_optima_eq_generous_optima hstranded hcan hreturn
+
+theorem route_realizes_conversion {n m : Nat}
+    (ctx : TheoremOne.FiniteCertifiedClaimContext n m) :
+    exists t,
+      RTC CoreTrace.CoreRel
+          (TheoremOne.routedClaimWFState ctx.initial ctx.beneficiary
+            ctx.converter ctx.qty ctx.stranded ctx.executable) t /\
+        TheoremOne.RealizedWholeConversion
+            (TheoremOne.routedClaimWFState ctx.initial ctx.beneficiary
+              ctx.converter ctx.qty ctx.stranded ctx.executable).state
+            t.state = ctx.qty /\
+        TheoremOne.RealizedOwnConversion ctx.beneficiary
+            (TheoremOne.routedClaimWFState ctx.initial ctx.beneficiary
+              ctx.converter ctx.qty ctx.stranded ctx.executable).state
+            t.state = ctx.qty :=
+  TheoremOne.route_realizes_conversion ctx.initial ctx.beneficiary
+    ctx.converter ctx.qty ctx.stranded ctx.path ctx.executable
+
+theorem hoarding_is_self_defeating {n m : Nat}
+    (ctx : TheoremOne.FiniteCertifiedClaimContext n m) :
+    TheoremOne.finiteCertifiedClaimPolicyOwnValue ctx
+        TheoremOne.FiniteCertifiedClaimPolicy.route >
+      TheoremOne.finiteCertifiedClaimPolicyOwnValue ctx
+        TheoremOne.FiniteCertifiedClaimPolicy.hoard := by
+  rw [TheoremOne.finite_certified_claim_policy_route_own_value,
+    TheoremOne.finite_certified_claim_policy_hoard_own_value]
+  exact ctx.stranded.1
+
+theorem selfish_optimum_contains_no_stranded_claim {n m : Nat}
+    (ctx : TheoremOne.FiniteCertifiedClaimContext n m) :
+    ¬ (TheoremOne.SelfishOptimalInFiniteCertifiedClaimPolicies ctx
+      TheoremOne.FiniteCertifiedClaimPolicy.hoard) :=
+  TheoremOne.selfish_optimum_contains_no_stranded_claim_in_finite_certified_policies
+    ctx
+
+theorem selfish_optima_eq_generous_optima {n m : Nat}
+    (ctx : TheoremOne.FiniteCertifiedClaimContext n m)
+    (choice : TheoremOne.FiniteCertifiedClaimPolicy) :
+    TheoremOne.SelfishOptimalInFiniteCertifiedClaimPolicies ctx choice ↔
+      TheoremOne.GenerousOptimalInFiniteCertifiedClaimPolicies ctx choice :=
+  TheoremOne.selfish_optima_eq_generous_optima_in_finite_certified_policies
+    ctx choice
 
 theorem debt_sums_to_zero {n : Nat} (d : TheoremOne.DebtLedger n) :
     TheoremOne.globalNetDebt d = 0 :=

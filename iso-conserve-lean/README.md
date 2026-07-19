@@ -62,10 +62,11 @@ ledger and a dependency graph: process stock, credit, base rate, detector budget
 restart-local progress, `wants`, and `holds` live in one record. Public transitions
 use `WFState`, with ordinary execution separated from cure steps as `ExecRel`,
 `CureRel`, and `CoreRel`. `ExecRel` covers work, acquire, and normal release;
-`CureRel` covers drain, yield, route, and claim release. The work step does not
-implicitly release locks; `WorkPlan.completion_holds_nothing` therefore permits a
-false-to-true completion only when the process already holds no locks. Release is
-an explicit event, which keeps the L3 ordinary-execution/cure distinction visible.
+`CureRel` covers drain, yield, route, claim release, and dependency
+conversion-return. The work step does not implicitly release locks;
+`WorkPlan.completion_holds_nothing` therefore permits a false-to-true completion
+only when the process already holds no locks. Release is an explicit event, which
+keeps the L3 ordinary-execution/cure distinction visible.
 
 The raw transition functions now have field-complete `CoreWF` preservation
 theorems. `workStepOfWF`, `acquireStepOfWF`, `execReleaseStepOfWF`,
@@ -74,7 +75,8 @@ theorems. `workStepOfWF`, `acquireStepOfWF`, `execReleaseStepOfWF`,
 their companion `*_is_*Rel` theorems retain each operational plan and guard.
 Normal release and claim release share `wf_releaseStep`; acquire uses the existing
 `runnable` guard because adding a lock to a done process would violate
-`done_holds_nothing`.
+`done_holds_nothing`. WP-B3 adds an eighth constructor,
+`conversionReturnStepOfWF`, with its own full preservation theorem.
 
 The trace layer is operationally typed. `EventRel` retains the dependent plan and
 admissibility evidence for each `CoreRel` arm, while `TypedRun` chains those events
@@ -228,16 +230,20 @@ homogeneous `StepEvent` list is only the accounting projection used by
   `off_partition_decrement_surfaces`, and
   `off_partition_increment_surfaces` prove the no-loss/heal surface: recorded
   off-partition debt and credit appear in the healed ledger.
-- Theorem 1 finite-action core:
-  `IsoConserve.TheoremOne.route_stranded_claim_strictly_dominates_hoard` proves
-  that, for a stranded claim, routing to a converter on a dependency-return edge
-  strictly beats hoarding for the holder's `ownConversion`. The implemented
-  optimality theorem is the reviewed fallback:
-  `TheoremOne.selfish_optima_eq_generous_optima` proves route is both selfishly and
-  generously optimal inside the finite `{hoard, route, release}` action set.
-  `selfish_optimum_contains_no_stranded_claim` and
-  `generous_optimum_contains_no_stranded_claim` rule out hoard as an optimum in
-  that set. The debt mini-model is covered by
+- Theorem 1 dynamical finite-policy core:
+  `IsoConserve.TheoremOne.routed_claim_is_routeRel` proves the actual route,
+  and `route_realizes_conversion` proves the conserving `ConversionReturnRel`
+  from that routed endpoint realizes exactly `q` of both private and whole
+  conversion. `routeCertifiedOutcome` chains both steps from the initial state;
+  `route_strictly_dominates_hoard` compares its state-derived value with the
+  certified stutter hoard.
+  `selfish_optimum_contains_no_stranded_claim_in_finite_certified_policies` and
+  `selfish_optima_eq_generous_optima_in_finite_certified_policies` are the
+  restriction-named policy fallback: each of hoard, route-and-return, and release
+  compiles to a certified `CoreRel` run, and its value is read from endpoint
+  conversion counters. The earlier `ClaimChoice` theorems remain as the reviewed
+  installed-payoff local kernel, not the paper-facing derivation. The debt
+  mini-model is covered by
   `budget_transfer_creates_equal_debit`, `global_debt_sums_to_zero`,
   `stolen_budget_is_not_net_progress`, and
   `dependency_makes_debt_return_to_debtor`.
@@ -259,8 +265,10 @@ aliases such as `PaperClaims.resolution_yield_loses_no_work`,
 `PaperClaims.effective_rate_eq_base_plus_waiters`,
 `PaperClaims.multiple_waiters_sum_not_max`, `PaperClaims.pn_counter_merge_converges`,
 and `PaperClaims.pn_counter_debt_surfaces`;
-plus the finite-action Theorem 1 aliases
-`PaperClaims.hoarding_is_self_defeating` and
+plus the dynamical finite-policy Theorem 1 aliases
+`PaperClaims.route_realizes_conversion`,
+`PaperClaims.hoarding_is_self_defeating`,
+`PaperClaims.selfish_optimum_contains_no_stranded_claim`, and
 `PaperClaims.selfish_optima_eq_generous_optima`. The canonical bridge aliases
 `PaperClaims.canonical_step_uses_derived_routed_rates` and
 `PaperClaims.python_routed_rate_step_verified` expose the derived-routed-rate
@@ -357,24 +365,31 @@ latency bounds, open-system sources/sinks, or Byzantine contribution safety.
 
 ## Theorem 1
 
-`IsoConserve.TheoremOne` is the 04i finite-action formalization of the paper's
-hoarding theorem. The payoff definition is `ownConversion`: converted benefit
-available to the actor, not nominal possession of unusable stock. A
-`StrandedClaim` is held stock that the holder cannot convert, and
-`DependencyReturn` is a directed dependency-return edge, currently the core
-`blockedOn` relation rather than undirected graph adjacency.
+`IsoConserve.TheoremOne` retains its 04i installed-payoff kernel, but WP-B3 adds
+the paper-facing dynamical proof above it. `DependencyPath` is the directed
+transitive closure of `blockedOn`. Under
+`ExactCanConvertAfterRoute.endpoints_distinct`, `routeState` subtracts rational Q
+from the stranded claimant and adds it at the converter, and `claimRoutePlan`
+proves that update is a valid balanced `RoutePlan`.
 
-The local strict theorem is `route_stranded_claim_strictly_dominates_hoard`.
-Given a positive stranded claim held by `i`, a converter `j`, and
-`DependencyReturn s i j`, routing strictly improves `i`'s own attainable
-conversion over hoarding. `hoarding_is_self_defeating` exports the same core under
-the paper-facing name.
+Exact execution is deliberately stronger than the old `CanConvertQty` predicate.
+`ExactCanConvertAfterRoute` carries a natural `k > 0`, the equation `q = κ·k`,
+distinct endpoints, remaining beneficiary work, and post-route convertibility.
+The new `ConversionReturnRel` consumes `κ·k` stock at the reachable converter,
+increments the beneficiary's real conversion counters, and clears the
+beneficiary's wait/holds. It preserves `accounted` and `CoreWF`, never increases
+blocked stock, and is represented in `EventRel`.
 
-The policy lift landed at the finite-action-set level:
-`selfish_optima_eq_generous_optima` proves that `route` is both selfishly and
-generously optimal among `{hoard, route, release}` for the supplied claim.
-The unrestricted full-policy theorem remains future work; the task file now records
-that this fallback is the committed level.
+`RealizedOwnConversion` and `RealizedWholeConversion` are solely
+final-minus-initial counter differences. `route_realizes_conversion` and
+`route_certified_outcome_realizes_conversion` derive both values as `q`; hoard is
+the certified identity run and release is an actual `DrainRel` returning Q to the
+reserve, so each derives zero. The accepted policy surface is explicitly named
+`FiniteCertifiedClaimPolicy`: within its claim-specific
+`{hoard, route-and-return, release}` programs, route is selfishly and generously
+optimal, hoard is not selfishly optimal, and the two optimum sets coincide. The
+unrestricted legacy `Policy` quantifies over unrelated and inadmissible actions,
+so no false universal theorem is asserted.
 
 The standalone `DebtLedger` mini-model distinguishes taking budget from taking
 work. `budget_transfer_creates_equal_debit` and `stolen_budget_is_not_net_progress`
