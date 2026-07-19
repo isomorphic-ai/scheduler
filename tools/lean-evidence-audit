@@ -91,6 +91,19 @@ headline_theorems=(
   IsoConserve.DetectorProgress.spinner_eventually_reclaimed
   IsoConserve.DetectorProgress.liar_survives_in_loop_if_it_reports_progress
   IsoConserve.DetectorProgress.liar_fails_reputation_check
+  IsoConserve.ResolutionYield.resolution_yield_conserves
+  IsoConserve.ResolutionYield.resolution_yield_loses_no_accounted_work
+  IsoConserve.ResolutionYield.no_victim_accounted_progress_preserved
+  IsoConserve.ResolutionYield.accounted_includes_banked_work
+  IsoConserve.ResolutionYield.credit_monotone
+  IsoConserve.ResolutionYield.restart_has_base_plus_credit
+  IsoConserve.ResolutionYield.resolution_yield_releases_held_locks
+  IsoConserve.ResolutionYield.yield_releases_wait_edge
+  IsoConserve.ResolutionYield.yield_breaks_closed_component
+  IsoConserve.ResolutionYield.least_credit_choice_spreads_burden
+  IsoConserve.ResolutionYield.canonical_credit_policy_completes_in_two_yields
+  IsoConserve.ResolutionYield.canonical_discard_policy_livelocks_for_all_n
+  IsoConserve.ResolutionYield.positive_credit_gain_finite_requirement_eventually_completes
   IsoConserve.Noether.mixedRel_accounted_clockFree
   IsoConserve.epistemic_invariant
   IsoConserve.alignment_invariant
@@ -214,7 +227,7 @@ fi
 | Rate routing | `04f-rate-routing-task.md` | review-gated | not implemented |
 | PN-counter distribution | `04e-lean-task.md` | review-gated | not implemented |
 | Detector/progress signal | `IsoConserve.DetectorProgress.detector_sound`, `IsoConserve.DetectorProgress.detection_latency_le_budget`, `IsoConserve.DetectorProgress.live_process_not_detected`, `IsoConserve.DetectorProgress.liar_fails_reputation_check` | proved | supplied component; selected-attempt schedule; honest signal plus reputation |
-| Resolution yield | `04h-resolution-yield-task.md` | review-gated | not implemented |
+| Resolution yield | `IsoConserve.ResolutionYield.resolution_yield_conserves`, `IsoConserve.ResolutionYield.yield_breaks_closed_component`, `IsoConserve.ResolutionYield.positive_credit_gain_finite_requirement_eventually_completes` | proved | supplied released-edge witness; Nat-unit toy termination |
 | Theorem 1 | `04i-theorem1-task.md` | review-gated | not implemented |
 | PaperClaims final closure | `04j-paper-claims-task.md` | review-gated | waits for future modules before final aliases |
 MATRIX

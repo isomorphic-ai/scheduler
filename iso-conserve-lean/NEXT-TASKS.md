@@ -348,8 +348,12 @@ review of that task file.
 
 ## Tier D — resolution policy (task file only after B lands)
 
-**Status:** task file drafted as `04h-resolution-yield-task.md` under the Round 4b
-WP4 naming. Implementation waits on review and the unified core/detector surface.
+**Status:** implemented in `IsoConserve.ResolutionYield` after Review #7's fixes
+to `04h-resolution-yield-task.md`. The module proves no-victim accounting for
+restart-local work banking, release-without-instant-regrant, explicit released-edge
+component breakage, least-credit yielder selection, and the credit-vs-discard toy
+termination contrast. The general scheduler-level termination theorem remains
+scoped to the Nat-unit toy variant.
 
 6. **4.2's missing half.** Extend BudgetWait (or a v4) with a `yield`
    action: a chosen member of a supplied closed component releases its
@@ -493,5 +497,5 @@ questions, and implementation order after review.
    **Status:** WP1+WP2 implemented in `IsoConserve.CoreTrace` after Review #7's
    fixes to `04d-core-trace-task.md`; WP3 implemented in
    `IsoConserve.DetectorProgress` after the 04g task-file repair. Next downstream
-   action is to revise the 04h and 04f approved-with-fixes task files against the
-   shared core before their code starts.
+   action is to revise the 04f approved-with-fixes task file against the shared
+   core before its code starts.

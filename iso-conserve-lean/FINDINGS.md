@@ -271,3 +271,26 @@
    prefix existence under the per-member lower-bound hypothesis; the selected-count
    budget bound is carried by the schedule evidence, not by an unnecessary
    per-member upper bound on the detecting prefix.
+
+29. Resolution yield now proves no-victim accounting and explicit component breakage.
+
+   `IsoConserve.ResolutionYield` banks restart-local converted work into credit,
+   resets the restart-local counter, releases held locks, and proves
+   `resolution_yield_conserves` plus `resolution_yield_loses_no_accounted_work`.
+   Component breakage is witness-based: `yield_releases_wait_edge` removes the
+   concrete waiter/yielder/lock edge, and `yield_breaks_closed_component` requires
+   the reviewed `honly` premise saying that edge was the waiter's only internal
+   blocker. The general rational positive-gain termination theorem is intentionally
+   not stated; the landed theorem
+   `positive_credit_gain_finite_requirement_eventually_completes` is the Nat-unit
+   toy variant, avoiding the Zeno-false formulation from Review #7.
+
+30. The deployed phase-2 detector matches the checked BudgetWait semantics.
+
+   Review #7's cross-track note reports that the Grok deadlock sidecar implements
+   the same three-way budget transition as `BudgetWait.budgetAfter`: drain only
+   when a transaction is in the wait set, refill on forward-progress counters, and
+   otherwise leave the budget unchanged. The empirical arm and formal arm therefore
+   agree at the transition-semantics level. This belongs in the 04j/PaperClaims
+   coverage table as implementation alignment for reading 4.1, not as a new Lean
+   theorem.
