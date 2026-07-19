@@ -309,8 +309,12 @@
    `WaiterPartitionAt`/`acyclicFrom` certificate: the evaluated upstream region is
    a disjoint finite waiter tree, and the process itself is live. That certificate
    is the formal repair for the acyclic/fuel/live-intermediate premises; cyclic or
-   over-fuel parts belong to `strandedRate`. The remaining 04f bridge is canonical
-   `pythonRatePlan` wiring from these derived weights, not the recursion theorem.
+   over-fuel parts belong to `strandedRate`. The canonical bridge now exists as
+   `canonical_step_uses_derived_routed_rates` and
+   `pythonRoutedRateStep_verified_mixed`: a unified `CoreState` is viewed through
+   `coreAsSys`, `routedWeights` is exactly `RateRouting.routedRate`, and the old
+   Python-style plan is verified under the positive routed-weight denominator
+   required by the share split.
 
 32. PN-counter distribution conserves per-node ledgers by max, not replica values by sum.
 

@@ -1,5 +1,6 @@
 import IsoConserve.L1Conservation
 import IsoConserve.L4Integral
+import IsoConserve.RateRouting
 import IsoConserve.Reachable
 import IsoConserve.ShareSum
 
@@ -470,6 +471,112 @@ theorem pythonRatePlan_conservation {n : Nat} (s : Sys n) (eff : Fin n -> Qty)
       accounted s := by
   exact L1_conservation s
     (pythonRatePlan s eff hreservoir hstock hTotalPos hweight).toFlowPlan
+
+noncomputable section RoutedRateBridge
+
+local instance propDecidable (p : Prop) : Decidable p :=
+  Classical.propDecidable p
+
+def coreProcAsProc {m : Nat} (p : CoreTrace.CoreProc m) : Proc :=
+  { rate := p.baseRate
+    workNeeded := p.workNeeded
+    stock := p.stock
+    credit := p.credit
+    converted := p.convertedSinceRestart
+    done := p.done
+    netFlowIntegral := p.stock + p.credit }
+
+def coreAsSys {n m : Nat} (s : CoreTrace.CoreState n m) : Sys n :=
+  { procs := fun p => coreProcAsProc (s.procs p)
+    runnable := fun p => decide (CoreTrace.runnable s p)
+    reservoir := s.reserve
+    convertCost := s.convertCost
+    totalQ := s.totalQ }
+
+theorem coreAsSys_accounted {n m : Nat} (s : CoreTrace.CoreState n m) :
+    accounted (coreAsSys s) = CoreTrace.accounted s := by
+  unfold accounted CoreTrace.accounted coreAsSys coreProcAsProc
+  apply congrArg (fun x => s.reserve + x)
+  apply sumFin_congr
+  intro p
+  unfold procAccounted CoreTrace.procAccounted
+  rfl
+
+theorem coreAsSys_WF {n m : Nat} {s : CoreTrace.CoreState n m}
+    (hwf : CoreTrace.CoreWF s) :
+    WF (coreAsSys s) := by
+  constructor
+  · exact hwf.cost_pos
+  · exact hwf.reserve_nonneg
+  · intro p
+    exact hwf.stock_nonneg p
+  · intro p
+    exact hwf.credit_nonneg p
+  · intro p
+    exact hwf.rate_nonneg p
+  · rw [coreAsSys_accounted]
+    exact hwf.accounted_eq_total
+
+def routedWeights {n m : Nat} (s : CoreTrace.CoreState n m) :
+    Fin n -> Qty :=
+  fun p => RateRouting.routedRate s p
+
+theorem routedWeights_nonneg {n m : Nat} {s : CoreTrace.CoreState n m}
+    (hwf : CoreTrace.CoreWF s) :
+    forall p, 0 <= routedWeights s p := by
+  intro p
+  exact RateRouting.routedRate_nonneg hwf p
+
+def pythonRoutedRatePlanOfCore {n m : Nat}
+    (s : CoreTrace.CoreState n m)
+    (hwf : CoreTrace.CoreWF s)
+    (hTotalPos : 0 < canonicalTotalWeight (coreAsSys s) (routedWeights s)) :
+    RatePlan (coreAsSys s) :=
+  pythonRatePlanOfWF (coreAsSys s) (routedWeights s)
+    (coreAsSys_WF hwf) hTotalPos (routedWeights_nonneg hwf)
+
+theorem routedRatePlan_weight_eq {n m : Nat}
+    (s : CoreTrace.CoreState n m)
+    (hwf : CoreTrace.CoreWF s)
+    (hTotalPos : 0 < canonicalTotalWeight (coreAsSys s) (routedWeights s))
+    (p : Fin n) :
+    (pythonRoutedRatePlanOfCore s hwf hTotalPos).weight p =
+      canonicalWeight (coreAsSys s) (routedWeights s) p := rfl
+
+theorem routedRatePlan_share_eq {n m : Nat}
+    (s : CoreTrace.CoreState n m)
+    (hwf : CoreTrace.CoreWF s)
+    (hTotalPos : 0 < canonicalTotalWeight (coreAsSys s) (routedWeights s))
+    (p : Fin n) :
+    (pythonRoutedRatePlanOfCore s hwf hTotalPos).share p =
+      canonicalShare (coreAsSys s) (routedWeights s) p := rfl
+
+def pythonRoutedRateStepOfCore {n m : Nat}
+    (s : CoreTrace.CoreState n m)
+    (hwf : CoreTrace.CoreWF s)
+    (hTotalPos : 0 < canonicalTotalWeight (coreAsSys s) (routedWeights s)) :
+    Sys n :=
+  pythonStepOfWF (coreAsSys s) (routedWeights s)
+    (coreAsSys_WF hwf) hTotalPos (routedWeights_nonneg hwf)
+
+theorem canonical_step_uses_derived_routed_rates {n m : Nat}
+    (s : CoreTrace.CoreState n m)
+    (hwf : CoreTrace.CoreWF s)
+    (hTotalPos : 0 < canonicalTotalWeight (coreAsSys s) (routedWeights s)) :
+    CanonicalPythonStepRel (coreAsSys s)
+      (pythonRoutedRateStepOfCore s hwf hTotalPos) := by
+  exact Or.inl ⟨routedWeights s, coreAsSys_WF hwf, hTotalPos,
+    routedWeights_nonneg hwf, rfl⟩
+
+theorem pythonRoutedRateStep_verified_mixed {n m : Nat}
+    (s : CoreTrace.CoreState n m)
+    (hwf : CoreTrace.CoreWF s)
+    (hTotalPos : 0 < canonicalTotalWeight (coreAsSys s) (routedWeights s)) :
+    MixedRel (coreAsSys s) (pythonRoutedRateStepOfCore s hwf hTotalPos) :=
+  canonicalPythonStepRel_is_mixedRel
+    (canonical_step_uses_derived_routed_rates s hwf hTotalPos)
+
+end RoutedRateBridge
 
 theorem pythonConvert_forced_maximal {n : Nat} (s : Sys n)
     (eff : Fin n -> Qty)

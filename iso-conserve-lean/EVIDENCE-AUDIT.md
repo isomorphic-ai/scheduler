@@ -1,6 +1,6 @@
 # Lean Evidence Audit
 
-- Git HEAD: `a99dbed`
+- Git HEAD: `ab3dc09`
 - Report note: this records the tree at the Git HEAD above; rerun `tools/lean-evidence-audit` for the current HEAD.
 - Worktree dirty at audit run: `yes`
 - Build: `PASS`
@@ -8,8 +8,8 @@
 - Headline `#print axioms`: `PASS`
 - Allowed axiom baseline: `[propext, Classical.choice, Quot.sound]` and subsets only
 - Lean modules: `21`
-- Source lines under `IsoConserve/`: `6777`
-- Syntactic theorem/lemma declarations: `422`
+- Source lines under `IsoConserve/`: `6899`
+- Syntactic theorem/lemma declarations: `431`
 
 ## Build Log
 
@@ -38,6 +38,8 @@ No matches under `IsoConserve/`.
 'IsoConserve.trust_on_absence_loss_counterexample' depends on axioms: [propext]
 'IsoConserve.pythonRatePlan_conservation' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.canonicalPythonStepRel_is_mixedRel' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.canonical_step_uses_derived_routed_rates' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.pythonRoutedRateStep_verified_mixed' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.credit_monotone_under_yield_reachable' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.WaitGraph.L3_waitComponent_absorbing_iter' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.WaitGraph.detection_sound' depends on axioms: [propext, Quot.sound]
@@ -140,6 +142,10 @@ No matches under `IsoConserve/`.
  Classical.choice,
  Quot.sound]
 'IsoConserve.PaperClaims.canonical_python_step_verified' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.canonical_step_uses_derived_routed_rates' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.PaperClaims.python_routed_rate_step_verified' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.PaperClaims.routed_rate_conserved' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.PaperClaims.effective_rate_eq_base_plus_waiters' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.PaperClaims.transitive_rate_routing' depends on axioms: [propext, Classical.choice, Quot.sound]
@@ -209,15 +215,15 @@ IsoConserve/WaitGraph.lean
 | Detection soundness with evidence | `IsoConserve.BudgetWait.detection_sound_with_budget_evidence` | proved | supplied closed component |
 | Resolution credit core | `IsoConserve.credit_monotone_under_yield_reachable` | proved | stock-to-credit core, not full restart yield |
 | Caching polarity | `IsoConserve.polarity_claim_one` and counterexample | proved | positive-trust lattice theorem |
-| Canonical Python flow step | `IsoConserve.canonicalPythonStepRel_is_mixedRel` | proved | supplied effective weights |
+| Canonical Python flow step | `IsoConserve.canonicalPythonStepRel_is_mixedRel`, `IsoConserve.canonical_step_uses_derived_routed_rates`, `IsoConserve.pythonRoutedRateStep_verified_mixed` | proved | supplied weights bridge plus derived routed-rate bridge with positive denominator |
 | Paper invariants | `epistemic_invariant`, `alignment_invariant`, `agency_invariant` | proved | ledger-level corollaries |
 | Flexibility collapse | `IsoConserve.Flexibility.collapse_whole_invariant` | proved | conservation identity only |
 | Noether slice | `IsoConserve.Noether.mixedRel_accounted_clockFree` | proved | uniqueness obstructed |
 | PaperClaims closure surface | `IsoConserve.PaperClaims.*` aliases for core trace, detector, resolution, routing, PN-counter, flexibility, Theorem 1, polarity, invariants | proved | theorem names are citation aliases; source modules define exact scope |
 | Unified core trace | `IsoConserve.CoreTrace.core_reachable_conserves_accounted`, `IsoConserve.CoreTrace.deadlock_exec_fixed`, `IsoConserve.CoreTrace.L4_stock_is_trace_integral` | proved | shared surface; full old-to-new simulation not proved |
-| Rate routing | `IsoConserve.RateRouting.routed_rate_conserved`, `IsoConserve.RateRouting.effective_rate_eq_base_plus_waiters`, `IsoConserve.RateRouting.multiple_waiters_sum_not_max`, `IsoConserve.RateRouting.pathfinder_low_share_eq_ten_thirteenths`, `IsoConserve.RateRouting.no_stored_boost_state` | partial | destination-sum KCL, partition-certified recursive equation, sum-not-max, exact shares, and memoryless return proved; canonical wiring remains |
+| Rate routing | `IsoConserve.RateRouting.routed_rate_conserved`, `IsoConserve.RateRouting.effective_rate_eq_base_plus_waiters`, `IsoConserve.RateRouting.multiple_waiters_sum_not_max`, `IsoConserve.RateRouting.pathfinder_low_share_eq_ten_thirteenths`, `IsoConserve.RateRouting.no_stored_boost_state`, `IsoConserve.canonical_step_uses_derived_routed_rates` | proved | destination-sum KCL, partition-certified recursive equation, sum-not-max, exact shares, memoryless return, and derived-rate canonical bridge |
 | PN-counter distribution | `IsoConserve.PNCounter.merge_assoc`, `IsoConserve.PNCounter.eval_eq_globalRecorded`, `IsoConserve.PNCounter.off_partition_decrement_surfaces` | proved | honest per-node ledgers by max; no CAP/gossip/Byzantine theorem |
 | Detector/progress signal | `IsoConserve.DetectorProgress.detector_sound`, `IsoConserve.DetectorProgress.detection_latency_le_budget`, `IsoConserve.DetectorProgress.live_process_not_detected`, `IsoConserve.DetectorProgress.liar_fails_reputation_check` | proved | supplied component; selected-attempt schedule; honest signal plus reputation |
 | Resolution yield | `IsoConserve.ResolutionYield.resolution_yield_conserves`, `IsoConserve.ResolutionYield.yield_breaks_closed_component`, `IsoConserve.ResolutionYield.positive_credit_gain_finite_requirement_eventually_completes` | proved | supplied released-edge witness; Nat-unit toy termination |
 | Theorem 1 finite-action core | `IsoConserve.TheoremOne.route_stranded_claim_strictly_dominates_hoard`, `IsoConserve.TheoremOne.selfish_optima_eq_generous_optima`, `IsoConserve.TheoremOne.global_debt_sums_to_zero` | partial | finite `{hoard, route, release}` action set and debt mini-model; full policy theorem remains |
-| PaperClaims remaining closure | `04j-paper-claims-task.md` | partial | aliases landed for current proved modules; full policy theorem, recursive rate equation, and production/engine-only rows remain outside Lean |
+| PaperClaims remaining closure | `04j-paper-claims-task.md` | partial | aliases landed for current proved modules; full unrestricted policy theorem and production/engine-only rows remain outside Lean |

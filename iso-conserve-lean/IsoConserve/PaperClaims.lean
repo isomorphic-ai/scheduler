@@ -195,6 +195,21 @@ theorem canonical_python_step_verified {n : Nat} {s t : Sys n}
     MixedRel s t :=
   IsoConserve.canonicalPythonStepRel_is_mixedRel h
 
+theorem canonical_step_uses_derived_routed_rates {n m : Nat}
+    (s : CoreTrace.CoreState n m)
+    (hwf : CoreTrace.CoreWF s)
+    (hTotalPos : 0 < canonicalTotalWeight (coreAsSys s) (routedWeights s)) :
+    CanonicalPythonStepRel (coreAsSys s)
+      (pythonRoutedRateStepOfCore s hwf hTotalPos) :=
+  IsoConserve.canonical_step_uses_derived_routed_rates s hwf hTotalPos
+
+theorem python_routed_rate_step_verified {n m : Nat}
+    (s : CoreTrace.CoreState n m)
+    (hwf : CoreTrace.CoreWF s)
+    (hTotalPos : 0 < canonicalTotalWeight (coreAsSys s) (routedWeights s)) :
+    MixedRel (coreAsSys s) (pythonRoutedRateStepOfCore s hwf hTotalPos) :=
+  IsoConserve.pythonRoutedRateStep_verified_mixed s hwf hTotalPos
+
 theorem routed_rate_conserved {n m : Nat}
     (s : CoreTrace.CoreState n m) (hwf : CoreTrace.CoreWF s) :
     sumFin (fun r =>

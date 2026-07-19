@@ -305,9 +305,10 @@ inheritance, memoryless return/no stored boost, share normalization, and exact
 Pathfinder `10/13` vs `3/13` rational shares. The acyclic recursive-equation
 theorem now lands as `effective_rate_eq_base_plus_waiters` under the explicit
 `WaiterPartitionAt`/`acyclicFrom` certificate, with `multiple_waiters_sum_not_max`
-covering the sum-not-max divergence. Remaining 04f follow-up: rewire
-`Canonical.pythonRatePlan` to use derived `routedRate` weights instead of supplied
-weights.
+covering the sum-not-max divergence. The canonical bridge is wired:
+`canonical_step_uses_derived_routed_rates` and
+`pythonRoutedRateStep_verified_mixed` instantiate the old Python-style canonical
+plan with derived `routedRate` weights under the positive denominator hypothesis.
 
 4. **4.3: effective rates from the wait graph.** The one reading with
    real unformalized mathematics. Define, on a wait relation restricted
