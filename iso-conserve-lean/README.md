@@ -20,6 +20,11 @@ Use `../tools/lean-evidence-audit --write` from `iso-conserve-lean/` to generate
 The package is pinned to Lean `v4.30.0` and intentionally uses only Lean/Std so it
 can build offline in this workspace.
 
+Review #8 independently reproduced the build on a second machine with a fresh
+Lean `v4.30.0` toolchain after moving the synced `.olean` cache aside: 24 jobs
+rebuilt from source, the sorry/admit/axiom scan stayed clean, and the theorem
+statements matched the recorded FINDINGS.
+
 ## Provenance
 
 The reviewed Lean branch is `iso-conserve-lean` in

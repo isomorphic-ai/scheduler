@@ -236,13 +236,13 @@
 
 26. CoreTrace is a shared surface, not the finished downstream modules.
 
-   The compatibility exports `old_L1_conservation_lifts`,
-   `old_blocked_stock_monotone_lifts`, `old_budget_wait_detection_lifts`, and
-   `old_yield_conservation_lifts` are documentation theorems today. WP3, WP4, and
-   WP5 now import `CoreTrace` for their first theorem surfaces, but the compatibility
-   exports still do not prove a full old-to-new simulation. Remaining downstream
-   work should keep using the shared record rather than reviving draft-local state
-   sketches.
+   The old-to-new compatibility items are documented as comments, not theorem
+   declarations: old L1 conservation, old blocked-stock monotonicity, old
+   BudgetWait detection, and old yield conservation still describe what a full
+   old-to-new simulation would owe. WP3, WP4, and WP5 now import `CoreTrace` for
+   their first theorem surfaces, but the compatibility notes still do not prove a
+   full old-to-new simulation. Remaining downstream work should keep using the
+   shared record rather than reviving draft-local state sketches.
 
 27. Detector/progress is now lifted onto the unified core state.
 
