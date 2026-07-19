@@ -16,4 +16,5 @@ import IsoConserve.CoreTrace
 import IsoConserve.DetectorProgress
 import IsoConserve.ResolutionYield
 import IsoConserve.RateRouting
+import IsoConserve.PNCounter
 import IsoConserve.PaperClaims

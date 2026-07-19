@@ -178,6 +178,16 @@ ordinary-execution/cure distinction visible.
   witness is exact over rationals: `pathfinder_low_share_eq_ten_thirteenths`,
   `pathfinder_medium_share_eq_three_thirteenths`, and
   `canonical_priority_inversion_cannot_form`.
+- PN-counter distribution 04e:
+  `IsoConserve.PNCounter.merge_idem`, `merge_comm`, and `merge_assoc` prove the
+  merge ACI surface for the pointwise-max ledger join, with `le_merge_left`,
+  `le_merge_right`, and `merge_least` exposing merge as the least upper bound.
+  `eval_eq_globalRecorded` proves merge-tree convergence to the pointwise global
+  record, independent of tree shape. `replica_le_globalRecorded`,
+  `partition_left_le_heal`, `partition_right_le_heal`,
+  `off_partition_decrement_surfaces`, and
+  `off_partition_increment_surfaces` prove the no-loss/heal surface: recorded
+  off-partition debt and credit appear in the healed ledger.
 
 ## Paper Claims Surface
 
@@ -248,6 +258,26 @@ to `actual`, with these named theorems:
 
 This module deliberately covers only the conservation identity. The phantom-race
 and carried-distribution demonstrations remain empirical engine results.
+
+## PN-Counter Distribution
+
+`IsoConserve.PNCounter` is the standalone 04e module for the paper's distribution
+reading. It imports only `Std` and models a PN-counter as per-node grow-only
+positive and negative ledgers. `merge` is componentwise `max`, not addition; this
+is the key conservation correction that prevents double-counting contributions
+already seen by both replicas.
+
+The semilattice surface is `merge_idem`, `merge_comm`, `merge_assoc`,
+`le_merge_left`, `le_merge_right`, and `merge_least`. `MergeTree.eval` evaluates
+arbitrary binary merge orders, and `eval_eq_globalRecorded` proves every merge
+tree yields the same pointwise `globalRecorded` ledger over its leaves.
+
+The no-loss surface is `replica_le_globalRecorded`,
+`partition_left_le_heal`, `partition_right_le_heal`,
+`off_partition_decrement_surfaces`, and `off_partition_increment_surfaces`.
+These are the checked form of "hidden by partition, not destroyed." The module
+does not prove CAP-as-schedule, the Present/Future publish protocol, gossip
+latency bounds, open-system sources/sinks, or Byzantine contribution safety.
 
 ## Noether Slice
 
