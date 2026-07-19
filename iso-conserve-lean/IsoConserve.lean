@@ -14,4 +14,5 @@ import IsoConserve.PaperInvariants
 import IsoConserve.Flexibility
 import IsoConserve.CoreTrace
 import IsoConserve.DetectorProgress
+import IsoConserve.ResolutionYield
 import IsoConserve.PaperClaims

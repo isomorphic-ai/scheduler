@@ -95,6 +95,18 @@ ordinary-execution/cure distinction visible.
   mixed-system step.
 - Resolution credit core: `IsoConserve.credit_monotone_under_yield_reachable`
   proves banked credit is non-decreasing over yield-only reachability.
+- Resolution yield WP4:
+  `IsoConserve.ResolutionYield.resolution_yield_conserves` and
+  `resolution_yield_loses_no_accounted_work` prove that restart-local converted
+  work is banked into credit without losing accounted progress.
+  `restart_has_base_plus_credit`, `resolution_yield_releases_held_locks`,
+  `yield_releases_wait_edge`, and `yield_breaks_closed_component` prove the
+  release/restart surface with an explicit released-lock witness.
+  `least_credit_choice_spreads_burden` captures the least-credit yielder policy.
+  The credit-vs-discard comparison is theorem-level via
+  `canonical_credit_policy_completes_in_two_yields`,
+  `canonical_discard_policy_livelocks_for_all_n`, and
+  `positive_credit_gain_finite_requirement_eventually_completes`.
 - Wait-graph L3/detection v2:
   `IsoConserve.WaitGraph.closedWaitSet_step`,
   `IsoConserve.WaitGraph.closedWaitSet_iter`,
@@ -359,6 +371,13 @@ least every member's starting budget, and
 `evidencedDeadlock`. This is the bounded logical-latency theorem; it is measured
 in bridge steps, not wall-clock time.
 
+Review #7's cross-track note reports that the deployed phase-2 deadlock sidecar
+uses the same detector transition shape as `BudgetWait.budgetAfter`: drain only
+while the transaction is in the wait set, refill on forward progress counters, and
+otherwise leave the budget unchanged. That makes the empirical detector an
+implementation-level instance of the checked semantics, not merely a matching
+outcome.
+
 V3 still deliberately omits lock acquisition and automatic cycle discovery.
 
 ## Detector/Progress WP3
@@ -395,6 +414,35 @@ A rising report refills budget and is trusted by the in-loop detector
 (`liar_survives_in_loop_if_it_reports_progress`); the separate reputation predicate
 catches reported progress that exceeds delivered progress
 (`liar_fails_reputation_check`).
+
+## Resolution Yield WP4
+
+`IsoConserve.ResolutionYield` is the 04h restart/yield model over the shared
+`CoreTrace.CoreState`. `resolutionYield s y` banks
+`s.convertCost * convertedSinceRestart y` into `credit y`, resets
+`convertedSinceRestart`, clears `wants`, rewinds `pc`, releases every lock held by
+`y`, and expands the restart budget cap to the old base cap plus the banked Nat
+progress units.
+
+The accounting theorems are `resolution_yield_conserves` for the whole state and
+`resolution_yield_loses_no_accounted_work` /
+`no_victim_accounted_progress_preserved` for the yielder's local account.
+`accounted_includes_banked_work` names the credit transfer, and `credit_monotone`
+states the monotonicity side under the explicit premise that the banked Q value is
+nonnegative.
+
+Component breakage is not inferred from yield alone. A `ReleaseWitness` identifies
+the yielder, waiter, and lock edge being released. `yield_releases_wait_edge` proves
+that edge is gone after the yield, and `yield_breaks_closed_component` proves the
+supplied component is no longer closed when that edge was the waiter's only
+internal blocker. The cure step releases without instant regrant; later lock
+acquisition remains a separate ordinary execution step.
+
+The livelock contrast is a small deterministic model. The credit policy completes
+the canonical two-unit case, while the discard policy is a fixed point for all
+iterations. `positive_credit_gain_finite_requirement_eventually_completes` is the
+Nat-unit finite-requirement toy theorem; it deliberately avoids the Zeno-false
+arbitrary-positive-rational statement rejected in Review #7.
 
 ## What The Plan Abstraction Covers
 
