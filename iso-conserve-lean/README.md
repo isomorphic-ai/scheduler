@@ -206,13 +206,30 @@ ordinary-execution/cure distinction visible.
 
 `IsoConserve.PaperClaims` is the compiled paper-facing alias layer for the current
 proved surface. It contains only aliases or thin corollaries whose source theorems
-already exist, such as `PaperClaims.L1_conservation`,
-`PaperClaims.detection_complete_bounded`, `PaperClaims.resolution_credit_core`,
-`PaperClaims.positive_trust_survives_loss`, and the current invariant aliases.
+already exist. The current surface includes the core aliases
+`PaperClaims.core_conservation`, repaired `PaperClaims.L2_monotonicity`,
+`PaperClaims.core_deadlock_exec_fixed`, and `PaperClaims.core_trace_integral`;
+detector/progress aliases such as `PaperClaims.detector_sound`,
+`PaperClaims.detection_latency_le_budget`, `PaperClaims.live_process_not_detected`,
+`PaperClaims.progress_signal_useful_kept`, and
+`PaperClaims.progress_signal_spinner_reclaimed`; resolution/routing/distribution
+aliases such as `PaperClaims.resolution_yield_loses_no_work`,
+`PaperClaims.routed_rate_conserved`, `PaperClaims.priority_inversion_cannot_form`,
+`PaperClaims.pn_counter_merge_converges`, and `PaperClaims.pn_counter_debt_surfaces`;
+plus the finite-action Theorem 1 aliases
+`PaperClaims.hoarding_is_self_defeating` and
+`PaperClaims.selfish_optima_eq_generous_optima`.
 
-Review-gated future claims from remaining downstream work should be added there
-only after their proof modules land; missing or partial claims are tracked in
-`NEXT-TASKS.md` and `REVIEW-QUEUE.md`, not represented by placeholders.
+`PaperClaims.L2_monotonicity` is explicitly the repaired/restricted reading over
+blockedness-preserving core traces. The known-false unrestricted reading is exposed
+separately as `PaperClaims.unrestricted_l2_is_false`.
+
+The evidence audit prints `#print axioms` for the headline set and treats the
+axiom surface as clean only when every theorem uses a subset of
+`[propext, Classical.choice, Quot.sound]`. Review-gated future claims should be
+added to `PaperClaims` only after their proof modules land; missing or partial
+claims are tracked in `NEXT-TASKS.md` and `REVIEW-QUEUE.md`, not represented by
+placeholders.
 
 ## Reusable Monotonicity Kernel
 

@@ -332,3 +332,16 @@
    The full unrestricted policy theorem remains review-gated rather than hidden
    behind a broad quantifier. `DebtLedger` is a standalone mini-model with debt
    conservation and return lemmas; it is not yet wired as a `CoreState` field.
+
+34. PaperClaims now closes over the current proved module surface.
+
+   `IsoConserve.PaperClaims` has been reconciled with the post-Review #7 modules
+   instead of treated as a fresh file: its aliases now cover unified core trace,
+   repaired L2, detector/progress, resolution yield, rate routing, PN-counter
+   distribution, flexibility collapse, polarity, invariants, and the finite-action
+   Theorem 1 surface. The headline `L2_monotonicity` is deliberately restricted to
+   blockedness-preserving core traces, while `unrestricted_l2_is_false` remains a
+   theorem-level warning against the old global reading. The audit helper now
+   checks the headline `#print axioms` output against the exact allowed baseline
+   `[propext, Classical.choice, Quot.sound]` and regenerates the coverage matrix
+   from a single command.

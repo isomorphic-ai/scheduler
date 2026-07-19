@@ -380,10 +380,12 @@ scoped to the Nat-unit toy variant.
 
 ## Tier E — the paper-facing artifact
 
-**Status:** task file drafted as `04j-paper-claims-task.md`. The reusable audit
-helper exists as `tools/lean-evidence-audit`; `IsoConserve.PaperClaims` now exports
-the current proved alias surface. Final `PaperClaims.lean` expansion waits on the
-reviewed theorem modules it will alias.
+**Status:** implemented for the current proved surface after Review #7's 04j
+task-file repair. `IsoConserve.PaperClaims` now aliases the unified core,
+detector/progress, resolution yield, rate routing, PN-counter, flexibility,
+polarity, invariant, and finite-action Theorem 1 theorems. The reusable audit
+helper exists as `tools/lean-evidence-audit`, checks the headline axiom baseline,
+and regenerates `EVIDENCE-AUDIT.md`.
 
 7. **Coverage table in README** (and mirrored in the combined paper's
    evaluation section): reading → Lean theorem names → what remains
@@ -391,7 +393,9 @@ reviewed theorem modules it will alias.
    must cite exact names at a pinned commit. Include the Noether
    obstruction (FINDINGS 20) as a cited *result*: the naive uniqueness
    reading is machine-checked false; normalized uniqueness is future
-   work with its own task file.
+   work with its own task file. Remaining partial rows are the full
+   unrestricted policy theorem, the acyclic recursive rate equation plus
+   canonical wiring, and engine/production-only claims.
 
 ## Standing rules: all carried. Task-file-first applies to Tiers B, C, D.
 
