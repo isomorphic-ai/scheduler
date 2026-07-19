@@ -915,3 +915,73 @@ steps) → B3 (the dynamical Theorem 1 — the deep one). R1 immediately,
 in parallel.
 
 — Fable, 2026-07-19
+
+---
+
+# Review #10 (2026-07-19): 04k — all three bridges + preservation + packaging — ACCEPTED, round CLOSED
+
+*Verified below the report: lake build rerun under my own invocation (24
+jobs, success), sorry/admit/axiom scan clean, and the load-bearing
+statements read in source, not in summaries. The order held (B2 → B1 →
+T1 → B3), each bridge followed by its own clean evidence audit — four
+audit commits, worktree clean at every one.*
+
+**B2 — the window bites, both ways.** `once_per_selection_window_never_floors`
+AND `missed_selection_window_floors` exist as theorems — the positive
+and negative witnesses the gate demanded. The predicate that fooled two
+reviewers is now pinned from both sides.
+
+**B1 — the commuting square is closed** and the obligations comment at
+the old CoreTrace tail is gone, replaced by proofs. L4 is now an
+integral theorem of the same transition system as L1–L3.
+
+**T1 — transitions produce well-formed states** (dd6af15), which B3
+then consumes — the sequencing rationale paid off exactly as planned.
+
+**B3 — derive-don't-install, achieved.** `route_realizes_conversion` is
+a constructive two-step `RTC CoreRel` run — a real route step, then a
+real conversion+return step — with `DependencyPath = TransGen blockedOn`
+and realized own/whole conversion measured as endpoint differences.
+The return leg was built the only acceptable way: a new
+`ConversionReturnRel` with `conversion_return_conservation` proven
+(accounted invariant exact) and `monotone_under_adversary` untouched
+(last commit to Reachable.lean predates 04k). Two scope decisions I
+endorse explicitly:
+
+1. **`ExactCanConvertAfterRoute` (q = κ·k)** — the exactness hypothesis
+   is the honest form of the Pro's sketch: conversion is quantized by
+   convertCost, so realizing exactly q requires divisibility; FINDINGS
+   38 states this instead of blurring it with an inequality that the
+   dynamics couldn't realize. This is a STRENGTHENED honesty, not a
+   weakened theorem.
+2. **Optimality over finite certified policies** — the pre-decided
+   named-restriction fallback, taken with the restriction in the
+   theorem name (`…_in_finite_certified_policies`), never hidden. The
+   audit confirms `PaperClaims.hoarding_is_self_defeating` now carries
+   the dynamical signature.
+
+**R1 — packaging closed**: count rule stated (431 included the four
+since-demoted True placeholders; Pro's 427 did not; now 504 real), all
+four requested headline `#print axioms` names verified, paper-numbers
+table generated (21 modules / 8,766 lines / 504 declarations), worktree
+clean at audit HEAD.
+
+**One process note, non-blocking:** FINDINGS 38 (the return-leg design
+note) landed in the SAME commit as the B3 implementation. The task said
+design note BEFORE code — and a same-commit note makes "before"
+unverifiable from history. The note itself is exactly what was asked
+for; next time give the design decision its own commit so the record
+proves the ordering instead of asserting it.
+
+**Next step is Fabian's:** the Pro's three bright seams are closed —
+this tree is ready to go back for re-certification, and this time the
+archive ships lean-toolchain + lake-manifest + EVIDENCE-AUDIT + build
+transcript (R1's whole point), so the Pro can run the kernel instead of
+auditing source blind. The paper's formalization numbers (old:
+1,717/105/10) update from the audit's generated table.
+
+The 04k TruthSeed said: no new theory, commuting squares and honest
+quantifiers. That is what was delivered — 1,375 insertions of exactly
+that, and nothing else. Round closed.
+
+— Fable, 2026-07-19
