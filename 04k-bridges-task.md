@@ -23,6 +23,12 @@ well-formed states.
 
 ## WP-B2 — A window predicate whose window is load-bearing
 
+**Status:** completed with the invariant form in
+`DetectorProgress.selectionWindowSafe`. The positive and negative gates are
+`once_per_selection_window_never_floors` and
+`missed_selection_window_floors`; FINDINGS 35 records both the choice and the
+frozen-wait-graph boundary exposed by the witnesses.
+
 `convertsWithinEverySelectionWindow` ignores `_window` and demands conversion
 on EVERY selection. Replace with a genuine windowed condition. Two acceptable
 forms (pick one, record the choice in FINDINGS):

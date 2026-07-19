@@ -354,3 +354,25 @@
    checks the headline `#print axioms` output against the exact allowed baseline
    `[propext, Classical.choice, Quot.sound]` and regenerates the coverage matrix
    from a single command.
+
+35. Detector slow-live safety now uses a real selected-attempt window.
+
+   `DetectorProgress.selectionWindowSafe` is the invariant-form repair selected
+   for 04k WP-B2. A conversion resets the remaining allowance to `window`; only
+   selections of that process consume the allowance; and a non-converting
+   selection is rejected when it would consume the last slot. Thus
+   `convertsWithinEverySelectionWindow` has a load-bearing `window` argument.
+   `once_per_selection_window_never_floors` checks the positive direction on a
+   two-selection window with exactly one conversion and also proves that the old
+   every-selection predicate is false. `missed_selection_window_floors` checks
+   the negative direction on the closed cycle: one missed size-one window drains
+   the member's budget to zero. The old stronger result remains only under the
+   explicit `*_every_selection` theorem names.
+
+   The witness also exposes the current schedule model's boundary:
+   `blockedOn_observeAttempt_iff` makes the wait graph invariant under
+   `observeAttempt`. A process that misses because it is blocked cannot later
+   unblock and convert in the same schedule semantics. The positive gate is
+   therefore a finite genuine window whose later non-converting runnable attempt
+   does not drain; repeated block/unblock/reconvert examples belong to the
+   CoreRel-to-trace bridge rather than being implied here.
