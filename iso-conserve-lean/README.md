@@ -188,6 +188,19 @@ ordinary-execution/cure distinction visible.
   `off_partition_decrement_surfaces`, and
   `off_partition_increment_surfaces` prove the no-loss/heal surface: recorded
   off-partition debt and credit appear in the healed ledger.
+- Theorem 1 finite-action core:
+  `IsoConserve.TheoremOne.route_stranded_claim_strictly_dominates_hoard` proves
+  that, for a stranded claim, routing to a converter on a dependency-return edge
+  strictly beats hoarding for the holder's `ownConversion`. The implemented
+  optimality theorem is the reviewed fallback:
+  `TheoremOne.selfish_optima_eq_generous_optima` proves route is both selfishly and
+  generously optimal inside the finite `{hoard, route, release}` action set.
+  `selfish_optimum_contains_no_stranded_claim` and
+  `generous_optimum_contains_no_stranded_claim` rule out hoard as an optimum in
+  that set. The debt mini-model is covered by
+  `budget_transfer_creates_equal_debit`, `global_debt_sums_to_zero`,
+  `stolen_budget_is_not_net_progress`, and
+  `dependency_makes_debt_return_to_debtor`.
 
 ## Paper Claims Surface
 
@@ -278,6 +291,34 @@ The no-loss surface is `replica_le_globalRecorded`,
 These are the checked form of "hidden by partition, not destroyed." The module
 does not prove CAP-as-schedule, the Present/Future publish protocol, gossip
 latency bounds, open-system sources/sinks, or Byzantine contribution safety.
+
+## Theorem 1
+
+`IsoConserve.TheoremOne` is the 04i finite-action formalization of the paper's
+hoarding theorem. The payoff definition is `ownConversion`: converted benefit
+available to the actor, not nominal possession of unusable stock. A
+`StrandedClaim` is held stock that the holder cannot convert, and
+`DependencyReturn` is a directed dependency-return edge, currently the core
+`blockedOn` relation rather than undirected graph adjacency.
+
+The local strict theorem is `route_stranded_claim_strictly_dominates_hoard`.
+Given a positive stranded claim held by `i`, a converter `j`, and
+`DependencyReturn s i j`, routing strictly improves `i`'s own attainable
+conversion over hoarding. `hoarding_is_self_defeating` exports the same core under
+the paper-facing name.
+
+The policy lift landed at the finite-action-set level:
+`selfish_optima_eq_generous_optima` proves that `route` is both selfishly and
+generously optimal among `{hoard, route, release}` for the supplied claim.
+The unrestricted full-policy theorem remains future work; the task file now records
+that this fallback is the committed level.
+
+The standalone `DebtLedger` mini-model distinguishes taking budget from taking
+work. `budget_transfer_creates_equal_debit` and `stolen_budget_is_not_net_progress`
+show that budget capture is paired with debt, `global_debt_sums_to_zero` shows
+debits and receivables are the same global matrix viewed from opposite sides, and
+`dependency_makes_debt_return_to_debtor` pins the dependency-return reading. The
+ledger is not a new `CoreState` field in this pass.
 
 ## Noether Slice
 

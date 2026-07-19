@@ -17,4 +17,5 @@ import IsoConserve.DetectorProgress
 import IsoConserve.ResolutionYield
 import IsoConserve.RateRouting
 import IsoConserve.PNCounter
+import IsoConserve.TheoremOne
 import IsoConserve.PaperClaims

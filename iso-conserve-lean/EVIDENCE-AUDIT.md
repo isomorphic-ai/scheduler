@@ -1,19 +1,19 @@
 # Lean Evidence Audit
 
-- Git HEAD: `1ee1db7`
+- Git HEAD: `92f8670`
 - Report note: this records the tree at the Git HEAD above; rerun `tools/lean-evidence-audit` for the current HEAD.
 - Worktree dirty at audit run: `yes`
 - Build: `PASS`
 - Sorry/admit/axiom scan: `PASS`
 - Headline `#print axioms`: `PASS`
-- Lean modules: `20`
-- Source lines under `IsoConserve/`: `5937`
-- Syntactic theorem/lemma declarations: `373`
+- Lean modules: `21`
+- Source lines under `IsoConserve/`: `6239`
+- Syntactic theorem/lemma declarations: `388`
 
 ## Build Log
 
 ```text
-Build completed successfully (23 jobs).
+Build completed successfully (24 jobs).
 ```
 
 ## Sorry Admit Axiom Scan
@@ -93,6 +93,19 @@ No matches under `IsoConserve/`.
 'IsoConserve.ResolutionYield.canonical_credit_policy_completes_in_two_yields' depends on axioms: [propext]
 'IsoConserve.ResolutionYield.canonical_discard_policy_livelocks_for_all_n' depends on axioms: [propext]
 'IsoConserve.ResolutionYield.positive_credit_gain_finite_requirement_eventually_completes' depends on axioms: [propext]
+'IsoConserve.RateRouting.routed_rate_conserved' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.RateRouting.pathfinder_low_share_eq_ten_thirteenths' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.RateRouting.no_stored_boost_state' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PNCounter.merge_assoc' depends on axioms: [propext, Quot.sound]
+'IsoConserve.PNCounter.eval_eq_globalRecorded' depends on axioms: [propext, Quot.sound]
+'IsoConserve.PNCounter.off_partition_decrement_surfaces' depends on axioms: [propext]
+'IsoConserve.TheoremOne.route_stranded_claim_strictly_dominates_hoard' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.TheoremOne.selfish_optima_eq_generous_optima' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.TheoremOne.global_debt_sums_to_zero' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.Noether.mixedRel_accounted_clockFree' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.epistemic_invariant' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.alignment_invariant' depends on axioms: [propext, Classical.choice, Quot.sound]
@@ -136,6 +149,7 @@ IsoConserve/RateRouting.lean
 IsoConserve/Reachable.lean
 IsoConserve/ResolutionYield.lean
 IsoConserve/ShareSum.lean
+IsoConserve/TheoremOne.lean
 IsoConserve/WaitGraph.lean
 ```
 
@@ -161,5 +175,5 @@ IsoConserve/WaitGraph.lean
 | PN-counter distribution | `IsoConserve.PNCounter.merge_assoc`, `IsoConserve.PNCounter.eval_eq_globalRecorded`, `IsoConserve.PNCounter.off_partition_decrement_surfaces` | proved | honest per-node ledgers by max; no CAP/gossip/Byzantine theorem |
 | Detector/progress signal | `IsoConserve.DetectorProgress.detector_sound`, `IsoConserve.DetectorProgress.detection_latency_le_budget`, `IsoConserve.DetectorProgress.live_process_not_detected`, `IsoConserve.DetectorProgress.liar_fails_reputation_check` | proved | supplied component; selected-attempt schedule; honest signal plus reputation |
 | Resolution yield | `IsoConserve.ResolutionYield.resolution_yield_conserves`, `IsoConserve.ResolutionYield.yield_breaks_closed_component`, `IsoConserve.ResolutionYield.positive_credit_gain_finite_requirement_eventually_completes` | proved | supplied released-edge witness; Nat-unit toy termination |
-| Theorem 1 | `04i-theorem1-task.md` | review-gated | not implemented |
+| Theorem 1 finite-action core | `IsoConserve.TheoremOne.route_stranded_claim_strictly_dominates_hoard`, `IsoConserve.TheoremOne.selfish_optima_eq_generous_optima`, `IsoConserve.TheoremOne.global_debt_sums_to_zero` | partial | finite `{hoard, route, release}` action set and debt mini-model; full policy theorem remains |
 | PaperClaims final closure | `04j-paper-claims-task.md` | review-gated | waits for future modules before final aliases |
