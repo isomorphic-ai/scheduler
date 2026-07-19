@@ -272,11 +272,13 @@ The divergence from classical priority inheritance must be explicit:
 ```lean
 theorem blocked_rate_reaches_holder
     (hwait : waitsOn s w = some h)
+    (hlive : unfinished s w)
     (hwf : CoreWF s) :
     baseRate s w <= effectiveRate s h
 
 theorem blocked_rate_reaches_root
     (hwait : waitsOn s w = some h)
+    (hlive : unfinished s w)
     (hdest : destination s n h = some r)
     (hwf : CoreWF s) :
     baseRate s w <= routedRate s r
@@ -284,6 +286,8 @@ theorem blocked_rate_reaches_root
 theorem multiple_waiters_sum_not_max
     (hw1 : waitsOn s w1 = some h)
     (hw2 : waitsOn s w2 = some h)
+    (hlive1 : unfinished s w1)
+    (hlive2 : unfinished s w2)
     (hne : w1 ≠ w2)
     (hwf : CoreWF s) :
     baseRate s w1 + baseRate s w2 <= effectiveRate s h
@@ -349,6 +353,7 @@ Required theorems:
 theorem remove_wait_edge_restores_base_rate
     (honly : noOtherWaiters s h)
     (hwait : waitsOn s w = some h)
+    (hlive : unfinished (removeWaitEdge s w h) h)
     (hrunnable : runnable (removeWaitEdge s w h) h) :
     routedRate (removeWaitEdge s w h) h = baseRate s h
 
