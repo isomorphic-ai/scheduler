@@ -114,6 +114,17 @@ theorem budgetCap_observe {n m : Nat} (s : CoreState n m)
       · simp [hc, hb]
   · simp [h]
 
+theorem converted_observe_self {n m : Nat} (s : CoreState n m)
+    (p : ProcId n) :
+    converted (observeAttempt s p) p =
+      if canConvert s p then converted s p + 1 else converted s p := by
+  unfold converted observeAttempt attemptProc
+  by_cases hc : canConvert s p
+  · simp [hc]
+  · by_cases hb : blocked s p
+    · simp [hc, hb]
+    · simp [hc, hb]
+
 theorem conversion_refills_budget {n m : Nat} {s : CoreState n m}
     {p : ProcId n} (hc : canConvert s p) :
     budget (observeAttempt s p) p = budgetCap s p := by
@@ -334,11 +345,44 @@ def convertsOnEverySelection {n m : Nat} :
       (actor = p -> canConvert s p) /\
         convertsOnEverySelection (observeAttempt s actor) rest p
 
+def selectionWindowSafe {n m : Nat} (window : Nat) :
+    CoreState n m -> List (ProcId n) -> ProcId n -> Nat -> Prop
+  | _s, [], _p, _remaining => True
+  | s, actor :: rest, p, remaining =>
+      if actor = p then
+        if canConvert s p then
+          selectionWindowSafe window (observeAttempt s actor) rest p window
+        else
+          1 < remaining /\
+            selectionWindowSafe window (observeAttempt s actor) rest p
+              (remaining - 1)
+      else
+        selectionWindowSafe window (observeAttempt s actor) rest p remaining
+
 def convertsWithinEverySelectionWindow {n m : Nat}
     (s : CoreState n m) (schedule : List (ProcId n))
-    (p : ProcId n) (_window : Nat) : Prop :=
-  forall pref, PrefixOf pref schedule ->
-    convertsOnEverySelection s pref p
+    (p : ProcId n) (window : Nat) : Prop :=
+  selectionWindowSafe window s schedule p window
+
+theorem selectionWindowSafe_append_left {n m : Nat}
+    (left right : List (ProcId n)) {s : CoreState n m} {p : ProcId n}
+    {window remaining : Nat}
+    (hlive : selectionWindowSafe window s (left ++ right) p remaining) :
+    selectionWindowSafe window s left p remaining := by
+  induction left generalizing s remaining with
+  | nil =>
+      simp [selectionWindowSafe]
+  | cons actor rest ih =>
+      by_cases hactor : actor = p
+      · subst actor
+        by_cases hc : canConvert s p
+        · simp only [List.cons_append, selectionWindowSafe, ↓reduceIte, hc] at hlive ⊢
+          exact ih (s := observeAttempt s p) (remaining := window) hlive
+        · simp only [List.cons_append, selectionWindowSafe, ↓reduceIte, hc] at hlive ⊢
+          exact ⟨hlive.1,
+            ih (s := observeAttempt s p) (remaining := remaining - 1) hlive.2⟩
+      · simp only [List.cons_append, selectionWindowSafe, hactor, ↓reduceIte] at hlive ⊢
+        exact ih (s := observeAttempt s actor) (remaining := remaining) hlive
 
 theorem budget_ne_zero_of_convertsOnEverySelection {n m : Nat}
     (schedule : List (ProcId n)) {s : CoreState n m} {p : ProcId n}
@@ -366,6 +410,85 @@ theorem budget_ne_zero_of_convertsOnEverySelection {n m : Nat}
           rw [budget_observe_ne s hne, budgetCap_observe, hbudget0]
       exact ih (s := observeAttempt s actor) hcap_next hbudget_next hlive_tail
 
+theorem budget_ne_zero_of_selectionWindowSafe {n m : Nat}
+    (schedule : List (ProcId n)) {s : CoreState n m} {p : ProcId n}
+    {window remaining : Nat}
+    (hwindow_pos : 0 < window)
+    (hremaining_pos : 0 < remaining)
+    (hwindow_le_cap : window <= budgetCap s p)
+    (hremaining_le_budget : remaining <= budget s p)
+    (hlive : selectionWindowSafe window s schedule p remaining) :
+    budget (runSchedule schedule s) p ≠ 0 := by
+  induction schedule generalizing s remaining with
+  | nil =>
+      simp only [runSchedule]
+      omega
+  | cons actor rest ih =>
+      have hwindow_next :
+          window <= budgetCap (observeAttempt s actor) p := by
+        rw [budgetCap_observe]
+        exact hwindow_le_cap
+      by_cases hactor : actor = p
+      · subst actor
+        by_cases hc : canConvert s p
+        · simp only [selectionWindowSafe, ↓reduceIte, hc] at hlive
+          have hbudget_next :
+              window <= budget (observeAttempt s p) p := by
+            rw [conversion_refills_budget hc]
+            exact hwindow_le_cap
+          exact ih (s := observeAttempt s p) (remaining := window)
+            hwindow_pos hwindow_next hbudget_next hlive
+        · simp only [selectionWindowSafe, ↓reduceIte, hc] at hlive
+          have hremaining_next_pos : 0 < remaining - 1 := by
+            omega
+          have hbudget_next :
+              remaining - 1 <= budget (observeAttempt s p) p := by
+            rw [budget_observe_self]
+            by_cases hb : blocked s p
+            · simp [hc, hb]
+              omega
+            · simp [hc, hb]
+              omega
+          exact ih (s := observeAttempt s p) (remaining := remaining - 1)
+            hremaining_next_pos hwindow_next hbudget_next hlive.2
+      · simp only [selectionWindowSafe, hactor, ↓reduceIte] at hlive
+        have hbudget_next :
+            remaining <= budget (observeAttempt s actor) p := by
+          rw [budget_observe_ne s (Ne.symm hactor)]
+          exact hremaining_le_budget
+        exact ih (s := observeAttempt s actor) (remaining := remaining)
+          hremaining_pos hwindow_next hbudget_next hlive
+
+theorem periodic_conversion_never_floors_every_selection {n m : Nat}
+    {s : CoreState n m} {schedule : List (ProcId n)} {p : ProcId n}
+    (hcap_pos : 0 < budgetCap s p)
+    (hbudget0 : budget s p = budgetCap s p)
+    (hlive : forall pref, PrefixOf pref schedule ->
+      convertsOnEverySelection s pref p) :
+    forall pref,
+      PrefixOf pref schedule ->
+      budget (runSchedule pref s) p ≠ 0 := by
+  intro pref hpref
+  exact budget_ne_zero_of_convertsOnEverySelection pref hcap_pos hbudget0
+    (hlive pref hpref)
+
+theorem live_process_not_detected_every_selection {n m : Nat}
+    {s : CoreState n m} {schedule : List (ProcId n)}
+    {p : ProcId n} {C : ProcId n -> Bool}
+    (hcap_pos : 0 < budgetCap s p)
+    (hbudget0 : budget s p = budgetCap s p)
+    (hlive : forall pref, PrefixOf pref schedule ->
+      convertsOnEverySelection s pref p)
+    (hp : C p = true) :
+    forall pref,
+      PrefixOf pref schedule ->
+      ¬ detectorFires (runSchedule pref s) C := by
+  intro pref hpref hfire
+  have hnz :=
+    periodic_conversion_never_floors_every_selection
+      hcap_pos hbudget0 hlive pref hpref
+  exact hnz (hfire.2.1 p hp)
+
 theorem periodic_conversion_never_floors {n m : Nat}
     {s : CoreState n m} {schedule : List (ProcId n)} {p : ProcId n}
     (hcap_pos : 0 < budgetCap s p)
@@ -376,8 +499,17 @@ theorem periodic_conversion_never_floors {n m : Nat}
       PrefixOf pref schedule ->
       budget (runSchedule pref s) p ≠ 0 := by
   intro pref hpref
-  exact budget_ne_zero_of_convertsOnEverySelection pref hcap_pos hbudget0
-    (hlive pref hpref)
+  rcases hpref with ⟨suffix, hschedule⟩
+  have hpref_live :
+      selectionWindowSafe (budgetCap s p) s pref p (budgetCap s p) := by
+    apply selectionWindowSafe_append_left (right := suffix)
+    rw [hschedule]
+    exact hlive
+  have hcap_le_budget : budgetCap s p <= budget s p := by
+    rw [hbudget0]
+    exact Nat.le_refl _
+  exact budget_ne_zero_of_selectionWindowSafe pref hcap_pos hcap_pos
+    (Nat.le_refl _) hcap_le_budget hpref_live
 
 theorem live_process_not_detected {n m : Nat}
     {s : CoreState n m} {schedule : List (ProcId n)}
@@ -394,6 +526,104 @@ theorem live_process_not_detected {n m : Nat}
   have hnz :=
     periodic_conversion_never_floors hcap_pos hbudget0 hlive pref hpref
   exact hnz (hfire.2.1 p hp)
+
+abbrev windowWitnessProc : ProcId 1 := 0
+
+def windowWitnessState : CoreState 1 0 :=
+  { procs := fun _ =>
+      { coreBeforeProc with
+        stock := 1
+        workNeeded := 2
+        budget := 2
+        budgetCap := 2 }
+    holds := fun _ l => Fin.elim0 l
+    reserve := 0
+    convertCost := 1
+    totalQ := 1 }
+
+def oncePerWindowSchedule : List (ProcId 1) :=
+  [windowWitnessProc, windowWitnessProc]
+
+@[simp] theorem windowWitness_canConvert :
+    canConvert windowWitnessState windowWitnessProc := by
+  unfold canConvert runnable unfinished windowWitnessState windowWitnessProc
+  simp [coreBeforeProc, not_blocked_no_locks]
+
+@[simp] theorem windowWitness_cannotConvert_after_one :
+    ¬ canConvert (observeAttempt windowWitnessState windowWitnessProc)
+      windowWitnessProc := by
+  intro hc
+  have hstock := hc.2.2
+  have hstock_zero :
+      ((observeAttempt windowWitnessState windowWitnessProc).procs
+        windowWitnessProc).stock = 0 := by
+    unfold observeAttempt attemptProc
+    simp only [if_pos windowWitness_canConvert]
+    simp [windowWitnessState, coreBeforeProc]
+    grind
+  have hcost_one :
+      (observeAttempt windowWitnessState windowWitnessProc).convertCost = 1 := rfl
+  rw [hstock_zero] at hstock
+  rw [hcost_one] at hstock
+  grind
+
+theorem once_per_selection_window_never_floors :
+    selectedCount oncePerWindowSchedule windowWitnessProc = 2 /\
+    convertsWithinEverySelectionWindow windowWitnessState
+      oncePerWindowSchedule windowWitnessProc 2 /\
+    ¬ convertsOnEverySelection windowWitnessState oncePerWindowSchedule
+      windowWitnessProc /\
+    converted (runSchedule oncePerWindowSchedule windowWitnessState)
+      windowWitnessProc = 1 /\
+    budget (runSchedule oncePerWindowSchedule windowWitnessState)
+      windowWitnessProc = 2 := by
+  constructor
+  · simp [oncePerWindowSchedule, selectedCount]
+  constructor
+  · simp [convertsWithinEverySelectionWindow, selectionWindowSafe,
+      oncePerWindowSchedule]
+  constructor
+  · simp [convertsOnEverySelection, oncePerWindowSchedule]
+  constructor
+  · change converted
+      (observeAttempt (observeAttempt windowWitnessState windowWitnessProc)
+        windowWitnessProc) windowWitnessProc = 1
+    rw [converted_observe_self]
+    rw [if_neg windowWitness_cannotConvert_after_one]
+    rw [converted_observe_self]
+    rw [if_pos windowWitness_canConvert]
+    rfl
+  · change budget
+      (observeAttempt (observeAttempt windowWitnessState windowWitnessProc)
+        windowWitnessProc) windowWitnessProc = 2
+    rw [budget_observe_self]
+    have hnot_blocked :
+        ¬ blocked (observeAttempt windowWitnessState windowWitnessProc)
+          windowWitnessProc :=
+      not_blocked_no_locks _ _
+    simp [windowWitness_cannotConvert_after_one, hnot_blocked]
+    rw [conversion_refills_budget windowWitness_canConvert]
+    rfl
+
+def missedWindowSchedule : List (ProcId 2) :=
+  [pid0]
+
+theorem missed_selection_window_floors :
+    selectedCount missedWindowSchedule pid0 = 1 /\
+    ¬ convertsWithinEverySelectionWindow cycleState missedWindowSchedule pid0 1 /\
+    budget (runSchedule missedWindowSchedule cycleState) pid0 = 0 := by
+  have hblocked : blocked cycleState pid0 :=
+    blocked_of_closed cycle_closed rfl
+  have hcannot : ¬ canConvert cycleState pid0 :=
+    CoreTrace.canConvert_false_of_blocked hblocked
+  constructor
+  · simp [missedWindowSchedule, selectedCount]
+  constructor
+  · simp [convertsWithinEverySelectionWindow, selectionWindowSafe,
+      missedWindowSchedule, hcannot]
+  · change budget (observeAttempt cycleState pid0) pid0 = 0
+    rw [blocked_nonconversion_drains_budget hblocked]
+    rfl
 
 structure ProgressProc where
   budget : Nat

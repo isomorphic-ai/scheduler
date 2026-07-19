@@ -49,7 +49,15 @@ lean_dir="$repo/iso-conserve-lean"
 
 cd "$lean_dir"
 
+review_nine_paperclaims=(
+  IsoConserve.PaperClaims.L1_conservation
+  IsoConserve.PaperClaims.core_trace_integral
+  IsoConserve.PaperClaims.detector_sound
+  IsoConserve.PaperClaims.hoarding_is_self_defeating
+)
+
 headline_theorems=(
+  "${review_nine_paperclaims[@]}"
   IsoConserve.L1_conservation
   IsoConserve.L2_monotone
   IsoConserve.L2_drain_monotone
@@ -123,7 +131,6 @@ headline_theorems=(
   IsoConserve.alignment_invariant
   IsoConserve.agency_invariant
   IsoConserve.Flexibility.collapse_whole_invariant
-  IsoConserve.PaperClaims.L1_conservation
   IsoConserve.PaperClaims.core_conservation
   IsoConserve.PaperClaims.L2_monotonicity
   IsoConserve.PaperClaims.legacy_blocked_stock_monotonicity
@@ -133,10 +140,8 @@ headline_theorems=(
   IsoConserve.PaperClaims.core_closed_wait_set_absorbing
   IsoConserve.PaperClaims.L3_wait_component_absorption
   IsoConserve.PaperClaims.L4_stock_integral
-  IsoConserve.PaperClaims.core_trace_integral
   IsoConserve.PaperClaims.detection_sound
   IsoConserve.PaperClaims.detection_complete_bounded
-  IsoConserve.PaperClaims.detector_sound
   IsoConserve.PaperClaims.detection_latency_le_budget
   IsoConserve.PaperClaims.live_process_not_detected
   IsoConserve.PaperClaims.progress_signal_useful_kept
@@ -168,7 +173,6 @@ headline_theorems=(
   IsoConserve.PaperClaims.agency_invariant
   IsoConserve.PaperClaims.collapse_whole_invariant
   IsoConserve.PaperClaims.flexibility_collapse_whole_invariant
-  IsoConserve.PaperClaims.hoarding_is_self_defeating
   IsoConserve.PaperClaims.selfish_optima_eq_generous_optima
   IsoConserve.PaperClaims.debt_sums_to_zero
 )
@@ -241,7 +245,16 @@ fi
   printf -- '- Allowed axiom baseline: `[propext, Classical.choice, Quot.sound]` and subsets only\n'
   printf -- '- Lean modules: `%s`\n' "$module_count"
   printf -- '- Source lines under `IsoConserve/`: `%s`\n' "$source_lines"
-  printf -- '- Syntactic theorem/lemma declarations: `%s`\n\n' "$decl_count"
+  printf -- '- Syntactic theorem/lemma declarations: `%s`\n' "$decl_count"
+  printf -- '- Declaration-counting rule: count source lines under `IsoConserve/` whose first non-whitespace token is `theorem` or `lemma`; the 431 snapshot included four `: True` compatibility placeholders later demoted at `2a29078`, while the 427 Pro snapshot did not.\n'
+  printf -- '- Review #9 headline-name note: all four requested exports exist unchanged as `PaperClaims.L1_conservation`, `PaperClaims.core_trace_integral`, `PaperClaims.detector_sound`, and `PaperClaims.hoarding_is_self_defeating`; no rename mapping is needed.\n\n'
+
+  printf '## Current Formalization Numbers\n\n'
+  printf '| Metric | Generated count |\n'
+  printf '|---|---:|\n'
+  printf '| Lean modules under `IsoConserve/` | %s |\n' "$module_count"
+  printf '| Source lines under `IsoConserve/` | %s |\n' "$source_lines"
+  printf '| Syntactic `theorem`/`lemma` declarations | %s |\n\n' "$decl_count"
 
   printf '## Build Log\n\n'
   printf '```text\n'

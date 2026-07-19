@@ -535,12 +535,18 @@ component is selected at least `k` times and every member starts with budget at 
 `detection_latency_le_budget` exposes the same result as a prefix-existence
 statement. It does not claim automatic cycle discovery.
 
-Slow-live safety is deliberately stronger than the prose minimum:
-`convertsWithinEverySelectionWindow` says the process converts whenever it is
-selected in every checked schedule prefix. With initial `budget = budgetCap` and
-positive cap, `periodic_conversion_never_floors` proves the budget is nonzero on
-every prefix, and `live_process_not_detected` shows any component containing that
-process cannot fire.
+Slow-live safety is stated over a genuine selected-attempt window.
+`selectionWindowSafe` carries a remaining-selection allowance: conversion resets
+it to the window size, other processes' selections leave it alone, and a selected
+non-conversion may not consume its final slot. With initial
+`budget = budgetCap` and positive cap, `periodic_conversion_never_floors` proves
+the budget is nonzero on every prefix, and `live_process_not_detected` shows any
+component containing that process cannot fire. The theorem-level witnesses
+`once_per_selection_window_never_floors` and `missed_selection_window_floors`
+make the window bite in both directions; the former also refutes the old
+every-selection premise on its concrete schedule. Because `observeAttempt`
+preserves the wait graph, repeated block/unblock/reconvert histories remain a
+typed-core-trace concern rather than a claim of this schedule-only model.
 
 The progress signal is an honest self-reporting channel, not Byzantine enforcement.
 A rising report refills budget and is trusted by the in-loop detector

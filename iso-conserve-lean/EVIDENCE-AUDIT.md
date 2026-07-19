@@ -1,15 +1,25 @@
 # Lean Evidence Audit
 
-- Git HEAD: `2a29078`
+- Git HEAD: `2e6f479`
 - Report note: this records the tree at the Git HEAD above; rerun `tools/lean-evidence-audit` for the current HEAD.
-- Worktree dirty at audit run: `no`
+- Worktree dirty at audit run: `yes`
 - Build: `PASS`
 - Sorry/admit/axiom scan: `PASS`
 - Headline `#print axioms`: `PASS`
 - Allowed axiom baseline: `[propext, Classical.choice, Quot.sound]` and subsets only
 - Lean modules: `21`
-- Source lines under `IsoConserve/`: `6905`
-- Syntactic theorem/lemma declarations: `427`
+- Source lines under `IsoConserve/`: `7135`
+- Syntactic theorem/lemma declarations: `434`
+- Declaration-counting rule: count source lines under `IsoConserve/` whose first non-whitespace token is `theorem` or `lemma`; the 431 snapshot included four `: True` compatibility placeholders later demoted at `2a29078`, while the 427 Pro snapshot did not.
+- Review #9 headline-name note: all four requested exports exist unchanged as `PaperClaims.L1_conservation`, `PaperClaims.core_trace_integral`, `PaperClaims.detector_sound`, and `PaperClaims.hoarding_is_self_defeating`; no rename mapping is needed.
+
+## Current Formalization Numbers
+
+| Metric | Generated count |
+|---|---:|
+| Lean modules under `IsoConserve/` | 21 |
+| Source lines under `IsoConserve/` | 7135 |
+| Syntactic `theorem`/`lemma` declarations | 434 |
 
 ## Build Log
 
@@ -24,6 +34,10 @@ No matches under `IsoConserve/`.
 ## Headline Axioms
 
 ```text
+'IsoConserve.PaperClaims.L1_conservation' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.core_trace_integral' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.detector_sound' does not depend on any axioms
+'IsoConserve.PaperClaims.hoarding_is_self_defeating' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.L1_conservation' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.L2_monotone' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.L2_drain_monotone' depends on axioms: [propext, Classical.choice, Quot.sound]
@@ -117,7 +131,6 @@ No matches under `IsoConserve/`.
 'IsoConserve.alignment_invariant' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.agency_invariant' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.Flexibility.collapse_whole_invariant' depends on axioms: [propext, Classical.choice, Quot.sound]
-'IsoConserve.PaperClaims.L1_conservation' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.PaperClaims.core_conservation' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.PaperClaims.L2_monotonicity' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.PaperClaims.legacy_blocked_stock_monotonicity' depends on axioms: [propext, Classical.choice, Quot.sound]
@@ -127,10 +140,8 @@ No matches under `IsoConserve/`.
 'IsoConserve.PaperClaims.core_closed_wait_set_absorbing' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.PaperClaims.L3_wait_component_absorption' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.PaperClaims.L4_stock_integral' depends on axioms: [propext, Classical.choice, Quot.sound]
-'IsoConserve.PaperClaims.core_trace_integral' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.PaperClaims.detection_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.PaperClaims.detection_complete_bounded' depends on axioms: [propext, Classical.choice, Quot.sound]
-'IsoConserve.PaperClaims.detector_sound' does not depend on any axioms
 'IsoConserve.PaperClaims.detection_latency_le_budget' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.PaperClaims.live_process_not_detected' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.PaperClaims.progress_signal_useful_kept' depends on axioms: [propext]
@@ -172,7 +183,6 @@ No matches under `IsoConserve/`.
 'IsoConserve.PaperClaims.flexibility_collapse_whole_invariant' depends on axioms: [propext,
  Classical.choice,
  Quot.sound]
-'IsoConserve.PaperClaims.hoarding_is_self_defeating' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.PaperClaims.selfish_optima_eq_generous_optima' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.PaperClaims.debt_sums_to_zero' depends on axioms: [propext, Classical.choice, Quot.sound]
 ```
