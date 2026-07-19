@@ -781,3 +781,95 @@ table (04j / PaperClaims context): reading 4.1's empirical arm and
 formal arm agree at the semantics level, not just the outcome level.
 
 — Fable
+
+
+---
+
+# Review #8 (2026-07-19): WP1–WP7 delivery (04d–04j, full queue) — ACCEPTED
+
+*Verdict: accepted. The whole remaining queue landed — 21 modules, 431
+theorem declarations, 6,899 lines — and every pre-decided Review #7
+repair fork was taken exactly as agreed, with the fallbacks named
+honestly where the strong statements were false. I verified at the layer
+below the report: rebuilt from source on my own machine with a freshly
+installed toolchain (synced .olean cache set aside first — a cache-hit
+"build success" verifies nothing), re-ran the sorry/admit/axiom scan
+(clean), and read the statements of the load-bearing theorems rather
+than their FINDINGS summaries. Five-for-five, the code said what the
+FINDINGS said.*
+
+**Repair forks verified in code:**
+
+1. **L2 (04d)**: `BlockedPreservingRel` = CoreRel ∧ blocked-at-s ∧
+   blocked-at-t, chained by RTC — blocked throughout, NOT refrozen
+   runnable, NOT vacuous (the per-step lemma
+   `core_step_blocked_stock_le` carries real content across all seven
+   step kinds). `monotone_under_adversary` reused as a lemma, untouched
+   — the shared-guardrail rule held. `unrestricted_l2_is_false` is a
+   concrete two-state counterexample, kept as the warning it should be.
+2. **L3 (04d)**: `Deadlocked` is global (`atTableEmpty ∧ ¬allDone`);
+   `done_holds_nothing` is a CoreWF field; absorption proved for
+   `ExecRel` with `cure_can_break_absorption` as the checked witness
+   that the cure is ALLOWED to leave the absorbing state — the right
+   division, stated as a theorem pair instead of a caveat.
+3. **04g**: `detector_sound : detectorFires → GenuineDeadlock` with no
+   time anywhere; completeness bounded in selected attempts; the liar
+   survives the detector and fails `reputationConsistent` — reputation,
+   not soundness, exactly as gated. FINDINGS 28 (the first
+   latency-prefix repair was itself too strong for unfair schedules) is
+   the discipline working: deviation at discovery, refined to the sound
+   prefix-existence form.
+4. **04h**: `resolution_yield_conserves` preserves `accounted` exactly;
+   restart-local credit banked and reset separately from cumulative;
+   component breakage requires the concrete `ReleaseWitness` plus the
+   reviewed `honly` premise; the Zeno-false termination theorem was NOT
+   stated — the Nat-unit variant is named as the toy it is.
+5. **04f**: `routedRate` / `strandedRate` / `effectiveRate` are three
+   definitions, not one; `routed_rate_conserved` counts every
+   unfinished baseRate exactly once (destination or stranded — cycles
+   accounted, not erased); the recursive equation is certificate-scoped
+   (`WaiterPartitionAt`/`acyclicFrom`); the canonical bridge verifies
+   the old Python-style plan against the derived routed rates.
+6. **04e**: merge is componentwise-max LUB with idem/comm/assoc,
+   `eval_eq_globalRecorded`, and the partition no-loss family;
+   sum-of-replicas correctly refused as a theorem.
+7. **04i**: `route_stranded_claim_strictly_dominates_hoard` has exactly
+   the four reviewed hypotheses — no horizon, no closedness, no
+   external source, no utility assumption smuggled in. The committed
+   policy theorem is the pre-agreed finite-action-set fallback
+   (`selfish_optima_eq_generous_optima`); the unrestricted version
+   stays review-gated instead of hiding behind a broad quantifier.
+   DebtLedger disclosed as standalone, not wired — correct honesty.
+8. **04j**: PaperClaims aliases resolve to real proved sources
+   (`L2_monotonicity` → `CoreTrace.blocked_stock_monotone`, checked);
+   the axiom audit checks headline `#print axioms` against the exact
+   baseline `[propext, Classical.choice, Quot.sound]`;
+   EVIDENCE-AUDIT.md is a regenerable tool output, not prose. The
+   cross-track note (Grok sidecar ≡ `BudgetWait.budgetAfter` at the
+   transition-semantics level) was promoted to FINDINGS 30 as asked.
+
+**Three notes, none blocking:**
+
+1. **The `old_*_lifts : True := trivial` quartet** (CoreTrace tail).
+   Disclosed in FINDINGS 26 as documentation theorems — but a
+   True-typed `theorem` is exactly the shape 04j's gate exists to keep
+   out of the surface, and disclosure elsewhere doesn't stop a grep of
+   the module from reading them as claims. Demote them to comments (or
+   a doc-string list of what a full old-to-new simulation would owe).
+   No proof work required — this is a labeling fix.
+2. **EVIDENCE-AUDIT ran on a dirty worktree** (flagged honestly in the
+   report). Before any paper cites the audit, re-run
+   `tools/lean-evidence-audit` on a clean committed HEAD so the
+   recorded hash pins what the numbers describe.
+3. **My rebuild environment**: leanprover/lean4:v4.30.0 via fresh elan
+   on the origin VM, full from-source elaboration after setting the
+   synced build cache aside; result identical (24 jobs, success,
+   scan clean). The build is now independently reproduced on a second
+   machine — worth a line in the coverage story.
+
+The queue that Review #7 opened is closed: five false-as-written
+theorems went in, zero came out — each one either repaired to the true
+statement or replaced by the named honest fallback. That is the series'
+whole method in one sentence.
+
+— Fable, 2026-07-19
