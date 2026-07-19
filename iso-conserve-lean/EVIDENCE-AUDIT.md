@@ -1,6 +1,6 @@
 # Lean Evidence Audit
 
-- Git HEAD: `04959a8`
+- Git HEAD: `dd6af15`
 - Report note: this records the tree at the Git HEAD above; rerun `tools/lean-evidence-audit` for the current HEAD.
 - Worktree dirty at audit run: `no`
 - Build: `PASS`
@@ -8,8 +8,8 @@
 - Headline `#print axioms`: `PASS`
 - Allowed axiom baseline: `[propext, Classical.choice, Quot.sound]` and subsets only
 - Lean modules: `21`
-- Source lines under `IsoConserve/`: `7311`
-- Syntactic theorem/lemma declarations: `443`
+- Source lines under `IsoConserve/`: `7621`
+- Syntactic theorem/lemma declarations: `457`
 - Declaration-counting rule: count source lines under `IsoConserve/` whose first non-whitespace token is `theorem` or `lemma`; the 431 snapshot included four `: True` compatibility placeholders later demoted at `2a29078`, while the 427 Pro snapshot did not.
 - Review #9 headline-name note: all four requested exports exist unchanged as `PaperClaims.L1_conservation`, `PaperClaims.core_trace_integral`, `PaperClaims.detector_sound`, and `PaperClaims.hoarding_is_self_defeating`; no rename mapping is needed.
 
@@ -18,8 +18,8 @@
 | Metric | Generated count |
 |---|---:|
 | Lean modules under `IsoConserve/` | 21 |
-| Source lines under `IsoConserve/` | 7311 |
-| Syntactic `theorem`/`lemma` declarations | 443 |
+| Source lines under `IsoConserve/` | 7621 |
+| Syntactic `theorem`/`lemma` declarations | 457 |
 
 ## Build Log
 
@@ -72,6 +72,21 @@ No matches under `IsoConserve/`.
 'IsoConserve.CoreTrace.closed_wait_set_converted_total_fixed' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.CoreTrace.cure_preserves_accounted' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.CoreTrace.cure_can_break_absorption' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.wf_workStep' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.wf_drainStep' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.wf_yieldStep' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.wf_routeStep' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.wf_acquireStep' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.wf_releaseStep' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.workStepOfWF_is_workRel' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.acquireStepOfWF_is_execAcquireRel' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.execReleaseStepOfWF_is_execReleaseRel' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.drainStepOfWF_is_drainRel' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.yieldStepOfWF_is_yieldRel' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.routeStepOfWF_is_routeRel' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.claimReleaseStepOfWF_is_releaseClaimRel' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
 'IsoConserve.CoreTrace.core_step_has_event' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.CoreTrace.core_step_iff_has_event' depends on axioms: [propext, Classical.choice, Quot.sound]
 'IsoConserve.CoreTrace.core_reachable_has_trace' depends on axioms: [propext, Classical.choice, Quot.sound]
@@ -96,6 +111,9 @@ No matches under `IsoConserve/`.
 'IsoConserve.DetectorProgress.liar_survives_in_loop_if_it_reports_progress' depends on axioms: [propext]
 'IsoConserve.DetectorProgress.liar_fails_reputation_check' depends on axioms: [propext, Quot.sound]
 'IsoConserve.ResolutionYield.resolution_yield_conserves' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.ResolutionYield.resolution_yield_preserves_coreWF' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
 'IsoConserve.ResolutionYield.resolution_yield_loses_no_accounted_work' depends on axioms: [propext,
  Classical.choice,
  Quot.sound]
@@ -237,10 +255,10 @@ IsoConserve/WaitGraph.lean
 | Flexibility collapse | `IsoConserve.Flexibility.collapse_whole_invariant` | proved | conservation identity only |
 | Noether slice | `IsoConserve.Noether.mixedRel_accounted_clockFree` | proved | uniqueness obstructed |
 | PaperClaims closure surface | `IsoConserve.PaperClaims.*` aliases for core trace, detector, resolution, routing, PN-counter, flexibility, Theorem 1, polarity, invariants | proved | theorem names are citation aliases; source modules define exact scope |
-| Unified core trace | `IsoConserve.CoreTrace.core_reachable_conserves_accounted`, `IsoConserve.CoreTrace.core_reachable_iff_has_typed_trace`, `IsoConserve.CoreTrace.L4_for_core_reachable` | proved | `TypedRun` is exactly `RTC CoreRel`; separate full old-to-new simulations remain unproved |
+| Unified core trace | `IsoConserve.CoreTrace.core_reachable_conserves_accounted`, `IsoConserve.CoreTrace.core_reachable_iff_has_typed_trace`, `IsoConserve.CoreTrace.L4_for_core_reachable`, `IsoConserve.CoreTrace.wf_workStep` and companion preservation theorems | proved | `TypedRun` is exactly `RTC CoreRel`; all seven admissible step arms construct `WFState`; separate full old-to-new simulations remain unproved |
 | Rate routing | `IsoConserve.RateRouting.routed_rate_conserved`, `IsoConserve.RateRouting.effective_rate_eq_base_plus_waiters`, `IsoConserve.RateRouting.multiple_waiters_sum_not_max`, `IsoConserve.RateRouting.pathfinder_low_share_eq_ten_thirteenths`, `IsoConserve.RateRouting.no_stored_boost_state`, `IsoConserve.canonical_step_uses_derived_routed_rates` | proved | destination-sum KCL, partition-certified recursive equation, sum-not-max, exact shares, memoryless return, and derived-rate canonical bridge |
 | PN-counter distribution | `IsoConserve.PNCounter.merge_assoc`, `IsoConserve.PNCounter.eval_eq_globalRecorded`, `IsoConserve.PNCounter.off_partition_decrement_surfaces` | proved | honest per-node ledgers by max; no CAP/gossip/Byzantine theorem |
 | Detector/progress signal | `IsoConserve.DetectorProgress.detector_sound`, `IsoConserve.DetectorProgress.detection_latency_le_budget`, `IsoConserve.DetectorProgress.live_process_not_detected`, `IsoConserve.DetectorProgress.liar_fails_reputation_check` | proved | supplied component; selected-attempt schedule; honest signal plus reputation |
-| Resolution yield | `IsoConserve.ResolutionYield.resolution_yield_conserves`, `IsoConserve.ResolutionYield.yield_breaks_closed_component`, `IsoConserve.ResolutionYield.positive_credit_gain_finite_requirement_eventually_completes` | proved | supplied released-edge witness; Nat-unit toy termination |
+| Resolution yield | `IsoConserve.ResolutionYield.resolution_yield_conserves`, `IsoConserve.ResolutionYield.resolution_yield_preserves_coreWF`, `IsoConserve.ResolutionYield.yield_breaks_closed_component`, `IsoConserve.ResolutionYield.positive_credit_gain_finite_requirement_eventually_completes` | proved | preservation constructs `resolutionYieldWFState`; component breakage needs a supplied released-edge witness; Nat-unit toy termination |
 | Theorem 1 finite-action core | `IsoConserve.TheoremOne.route_stranded_claim_strictly_dominates_hoard`, `IsoConserve.TheoremOne.selfish_optima_eq_generous_optima`, `IsoConserve.TheoremOne.global_debt_sums_to_zero` | partial | finite `{hoard, route, release}` action set and debt mini-model; full policy theorem remains |
 | PaperClaims remaining closure | `04j-paper-claims-task.md` | partial | aliases landed for current proved modules; full unrestricted policy theorem and production/engine-only rows remain outside Lean |
