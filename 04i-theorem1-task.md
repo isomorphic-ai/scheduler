@@ -37,6 +37,11 @@ Do **not** define dependency as ordinary undirected adjacency. The structural
 hypothesis is dependency-return: the holder's attainable conversion runs through the
 converter or the dependency whole containing it.
 
+Policy scope is deliberately single-step in this task. A `Policy` chooses one
+`Action` for the current `CoreState`; it is not a multi-step horizon optimizer.
+This avoids reopening the horizon/endgame question by construction. Any future
+multi-step value theorem needs its own task file.
+
 If a proof seems to require one of the forbidden assumptions, stop and repair the
 definitions rather than adding the assumption.
 
@@ -184,11 +189,20 @@ for a given stranded claim, the action set `{hoard, route, release}` has no
 selfish optimum at `hoard`, and `route` is optimal for both `ownConversion i` and
 `wholeConversion`.
 
+Whichever level lands first must be recorded in README/FINDINGS: full policy-level
+`selfish_optima_eq_generous_optima`, or the finite-action-set fallback with the
+general theorem left review-gated.
+
 ---
 
 ## 5. Debt Ledger
 
 Formalize the distinction between taking budget and taking work.
+
+`DebtLedger` is a standalone mini-model for the debt/accounting distinction in
+this task. It should include documented bridge lemmas to `CoreState` transfers
+where straightforward, but it is not required to become another field of
+`CoreState` in this pass.
 
 Suggested state:
 
