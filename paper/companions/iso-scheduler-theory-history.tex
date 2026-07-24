@@ -1,0 +1,63 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amsthm}
+\usepackage{geometry}
+\geometry{a4paper, margin=2.5cm}
+\usepackage{hyperref}
+\newtheorem{law}{Law}
+
+\title{IsoConserve: Statement History of the Conservation Laws\\
+\large Companion note to ``The Isomorphic Scheduler''}
+\author{Fabian Franz\\Isomorphic AI \and Claude (Anthropic)\\Research Collaborator}
+\date{July 17, 2026}
+
+\begin{document}
+\maketitle
+
+\noindent This note conserves the evolution of the law statements
+across the series and their Lean~4 formalization. Nothing here is
+required to use the theory; it is the ledger of how the statements
+reached their final form.
+
+\section{L2: from prose to proof}
+
+\paragraph{Original statement (series papers 04 and 08).}
+\emph{``In any interval with no progress, convertible stock is monotone
+non-increasing.''} The prose carried a parenthetical---``in the
+no-injection regime that holds once a set is blocked''---doing
+load-bearing work without being part of the claim.
+
+\paragraph{The counterexample the machine forced.} A no-progress
+interval may contain a \emph{flow} step: reservoir shares injected into
+a runnable process that then fails to convert. Convertible stock rises;
+no progress is made. The unrestricted statement is false.
+
+\paragraph{Corrected statement (proven).}
+\begin{law}[L2, final form]
+Along any reachable sequence of non-injecting transitions (drain and
+yield steps), convertible stock is monotone non-increasing. Moreover,
+each \emph{blocked} process's stock is individually non-increasing
+under arbitrary mixed sequences, and flow steps leave blocked stocks
+unchanged.
+\end{law}
+
+\paragraph{Why nothing downstream weakens.} Detection reads blocked
+processes; their stocks are monotone unconditionally
+(\texttt{blocked\_stock\_monotone} in \texttt{Reachable.lean}), so
+detection soundness (\texttt{detection\_sound}) is untouched.
+
+\paragraph{The lesson, recorded.} The parenthetical was the hypothesis.
+Formalization did not merely check the theory; it falsified one clause
+and returned the repaired clause with a proof---the epistemic invariant
+applied to the theory itself: let the ledger overrule the narrative.
+
+\section{Provenance}
+Original statements: series papers 04 (\S4.2) and 08-expanded (\S4.4),
+repository \texttt{isomorphic-ai/scheduler}. Corrected forms:
+\texttt{IsoConserve/L2Monotone.lean} and
+\texttt{IsoConserve/Reachable.lean}, branch \texttt{iso-conserve-lean}.
+The prose papers retain their original wording pending revision; this
+note is the authoritative reconciliation until then.
+
+\end{document}
