@@ -20,20 +20,6 @@ Use `../tools/lean-evidence-audit --write` from `iso-conserve-lean/` to generate
 The package is pinned to Lean `v4.30.0` and intentionally uses only Lean/Std so it
 can build offline in this workspace.
 
-Review #8 independently reproduced the build on a second machine with a fresh
-Lean `v4.30.0` toolchain after moving the synced `.olean` cache aside: 24 jobs
-rebuilt from source, the sorry/admit/axiom scan stayed clean, and the theorem
-statements matched the recorded FINDINGS.
-
-## Provenance
-
-The reviewed Lean branch is `iso-conserve-lean` in
-`git@github.com:isomorphic-ai/scheduler.git`, with local base commit
-`e77bd5c8fbef3b07d52afe26c9e6261dee6fd181` (`Finish theorem 4`). When publishing
-follow-up proof/doc changes, keep `04b-lean-task.md`, `NEXT-TASKS.md`, and
-`REVIEW-by-fable.md` in the same committed tree so paper references have a single
-immutable target.
-
 ## Model
 
 The model uses a finite indexed process set, `Fin n -> Proc`, to avoid structural
