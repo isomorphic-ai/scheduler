@@ -1,0 +1,2262 @@
+import IsoConserve.Reachable
+
+namespace IsoConserve
+namespace CoreTrace
+
+noncomputable section
+
+local instance propDecidable (p : Prop) : Decidable p :=
+  Classical.propDecidable p
+
+abbrev ProcId (n : Nat) := Fin n
+abbrev LockId (m : Nat) := Fin m
+
+structure CoreProc (m : Nat) where
+  baseRate : Qty
+  stock : Qty
+  credit : Qty
+  convertedTotal : Nat
+  convertedSinceRestart : Nat
+  workNeeded : Nat
+  pc : Nat
+  wants : Option (LockId m)
+  budget : Nat
+  budgetCap : Nat
+  done : Bool
+deriving Repr
+
+structure CoreState (n m : Nat) where
+  procs : ProcId n -> CoreProc m
+  holds : ProcId n -> LockId m -> Bool
+  reserve : Qty
+  convertCost : Qty
+  totalQ : Qty
+
+def procAccounted (cost : Qty) (p : CoreProc m) : Qty :=
+  p.stock + p.credit + cost * (p.convertedSinceRestart : Qty)
+
+def accounted {n m : Nat} (s : CoreState n m) : Qty :=
+  s.reserve + sumFin (fun p => procAccounted s.convertCost (s.procs p))
+
+def heldBy {n m : Nat} (s : CoreState n m) (l : LockId m)
+    (p : ProcId n) : Prop :=
+  s.holds p l = true
+
+def blockedOn {n m : Nat} (s : CoreState n m) (p q : ProcId n) : Prop :=
+  exists l, (s.procs p).wants = some l /\ s.holds q l = true /\ q != p
+
+def blocked {n m : Nat} (s : CoreState n m) (p : ProcId n) : Prop :=
+  exists q, blockedOn s p q
+
+def runnable {n m : Nat} (s : CoreState n m) (p : ProcId n) : Prop :=
+  (s.procs p).done = false /\ ¬ blocked s p
+
+def unfinished {n m : Nat} (s : CoreState n m) (p : ProcId n) : Prop :=
+  (s.procs p).done = false /\ (s.procs p).convertedTotal < (s.procs p).workNeeded
+
+def canConvert {n m : Nat} (s : CoreState n m) (p : ProcId n) : Prop :=
+  runnable s p /\ unfinished s p /\ s.convertCost <= (s.procs p).stock
+
+def ClosedDependencySet {n m : Nat} (s : CoreState n m)
+    (C : ProcId n -> Bool) : Prop :=
+  forall p, C p = true ->
+    unfinished s p /\ exists q, C q = true /\ blockedOn s p q
+
+def closedDependencySet {n m : Nat} := @ClosedDependencySet n m
+
+def strandedClaim {n m : Nat} (s : CoreState n m) (p : ProcId n) : Prop :=
+  0 < (s.procs p).stock /\ ¬ canConvert s p
+
+def allDone {n m : Nat} (s : CoreState n m) : Prop :=
+  forall p, (s.procs p).done = true
+
+def atTableEmpty {n m : Nat} (s : CoreState n m) : Prop :=
+  forall p, ¬ runnable s p
+
+def Deadlocked {n m : Nat} (s : CoreState n m) : Prop :=
+  atTableEmpty s /\ ¬ allDone s
+
+def totalConverted {n m : Nat} (s : CoreState n m) : Qty :=
+  sumFin (fun p => ((s.procs p).convertedTotal : Qty))
+
+def totalConvertedIn {n m : Nat} (C : ProcId n -> Bool)
+    (s : CoreState n m) : Qty :=
+  sumFin (fun p => if C p then ((s.procs p).convertedTotal : Qty) else 0)
+
+def convertibleStock {n m : Nat} (s : CoreState n m) : Qty :=
+  sumFin (fun p => if runnable s p then (s.procs p).stock else 0)
+
+structure CoreWF {n m : Nat} (s : CoreState n m) : Prop where
+  cost_pos : 0 < s.convertCost
+  reserve_nonneg : 0 <= s.reserve
+  stock_nonneg : forall p, 0 <= (s.procs p).stock
+  credit_nonneg : forall p, 0 <= (s.procs p).credit
+  rate_nonneg : forall p, 0 <= (s.procs p).baseRate
+  budget_le_cap : forall p, (s.procs p).budget <= (s.procs p).budgetCap
+  since_le_total :
+    forall p, (s.procs p).convertedSinceRestart <= (s.procs p).convertedTotal
+  done_holds_nothing :
+    forall p l, (s.procs p).done = true -> s.holds p l = false
+  accounted_eq_total : accounted s = s.totalQ
+
+structure WFState (n m : Nat) where
+  state : CoreState n m
+  wf : CoreWF state
+
+structure WorkPlan {n m : Nat} (s : CoreState n m) where
+  flow : ProcId n -> Qty
+  convert : ProcId n -> Nat
+  flow_nonneg : forall p, 0 <= flow p
+  flow_only_runnable : forall p, ¬ runnable s p -> flow p = 0
+  convert_only_canConvert : forall p, ¬ canConvert s p -> convert p = 0
+  completion_holds_nothing : forall p l,
+    (s.procs p).done = false ->
+    0 < convert p ->
+    (s.procs p).workNeeded <= (s.procs p).convertedTotal + convert p ->
+    s.holds p l = false
+  reserve_after_nonneg : 0 <= s.reserve - sumFin flow
+  stock_after_nonneg : forall p,
+    0 <= (s.procs p).stock + flow p -
+      s.convertCost * (convert p : Qty)
+
+def doneAfterWork {n m : Nat} (s : CoreState n m)
+    (plan : WorkPlan s) (p : ProcId n) : Bool :=
+  if (s.procs p).done then
+    true
+  else if 0 < plan.convert p /\
+      (s.procs p).workNeeded <= (s.procs p).convertedTotal + plan.convert p then
+    true
+  else
+    false
+
+def workProc {n m : Nat} (s : CoreState n m)
+    (plan : WorkPlan s) (p : ProcId n) : CoreProc m :=
+  let old := s.procs p
+  { old with
+    stock := old.stock + plan.flow p -
+      s.convertCost * (plan.convert p : Qty)
+    convertedTotal := old.convertedTotal + plan.convert p
+    convertedSinceRestart := old.convertedSinceRestart + plan.convert p
+    budget := if 0 < plan.convert p then old.budgetCap else old.budget
+    done := doneAfterWork s plan p }
+
+def workStep {n m : Nat} (s : CoreState n m) (plan : WorkPlan s) :
+    CoreState n m :=
+  { procs := fun p => workProc s plan p
+    holds := s.holds
+    reserve := s.reserve - sumFin plan.flow
+    convertCost := s.convertCost
+    totalQ := s.totalQ }
+
+theorem procAccounted_workProc {n m : Nat} (s : CoreState n m)
+    (plan : WorkPlan s) (p : ProcId n) :
+    procAccounted s.convertCost (workProc s plan p) =
+      procAccounted s.convertCost (s.procs p) + plan.flow p := by
+  unfold procAccounted workProc
+  grind
+
+theorem work_conservation {n m : Nat} (s : CoreState n m)
+    (plan : WorkPlan s) :
+    accounted (workStep s plan) = accounted s := by
+  unfold accounted workStep
+  have hsum :
+      sumFin (fun p =>
+        procAccounted s.convertCost (workProc s plan p)) =
+        sumFin (fun p =>
+          procAccounted s.convertCost (s.procs p)) +
+          sumFin plan.flow := by
+    calc
+      sumFin (fun p =>
+          procAccounted s.convertCost (workProc s plan p)) =
+          sumFin (fun p =>
+            procAccounted s.convertCost (s.procs p) + plan.flow p) := by
+            apply sumFin_congr
+            intro p
+            exact procAccounted_workProc s plan p
+      _ = sumFin (fun p => procAccounted s.convertCost (s.procs p)) +
+            sumFin plan.flow := by
+            exact sumFin_add
+              (fun p => procAccounted s.convertCost (s.procs p))
+              plan.flow
+  grind
+
+theorem wf_workStep {n m : Nat} (s : CoreState n m)
+    (plan : WorkPlan s) (h : CoreWF s) : CoreWF (workStep s plan) := by
+  constructor
+  · exact h.cost_pos
+  · exact plan.reserve_after_nonneg
+  · intro p
+    exact plan.stock_after_nonneg p
+  · intro p
+    simpa [workStep, workProc] using h.credit_nonneg p
+  · intro p
+    simpa [workStep, workProc] using h.rate_nonneg p
+  · intro p
+    unfold workStep workProc
+    by_cases hc : 0 < plan.convert p
+    · simp [hc]
+    · simp [hc]
+      exact h.budget_le_cap p
+  · intro p
+    have hle := h.since_le_total p
+    have hnew :
+        (s.procs p).convertedSinceRestart + plan.convert p <=
+          (s.procs p).convertedTotal + plan.convert p := by
+      omega
+    simpa [workStep, workProc] using hnew
+  · intro p l hdone
+    change doneAfterWork s plan p = true at hdone
+    change s.holds p l = false
+    cases hsource : (s.procs p).done with
+    | false =>
+        by_cases hcomplete :
+            0 < plan.convert p /\
+              (s.procs p).workNeeded <=
+                (s.procs p).convertedTotal + plan.convert p
+        · exact plan.completion_holds_nothing p l hsource
+            hcomplete.1 hcomplete.2
+        · simp [doneAfterWork, hsource, hcomplete] at hdone
+    | true =>
+        exact h.done_holds_nothing p l hsource
+  · calc
+      accounted (workStep s plan) = accounted s := work_conservation s plan
+      _ = s.totalQ := h.accounted_eq_total
+
+structure DrainPlan {n m : Nat} (s : CoreState n m) where
+  amount : ProcId n -> Qty
+  amount_nonneg : forall p, 0 <= amount p
+  stock_after_nonneg : forall p, 0 <= (s.procs p).stock - amount p
+
+def drainProc {n m : Nat} (s : CoreState n m)
+    (plan : DrainPlan s) (p : ProcId n) : CoreProc m :=
+  let old := s.procs p
+  { old with stock := old.stock - plan.amount p }
+
+def drainStep {n m : Nat} (s : CoreState n m) (plan : DrainPlan s) :
+    CoreState n m :=
+  { procs := fun p => drainProc s plan p
+    holds := s.holds
+    reserve := s.reserve + sumFin plan.amount
+    convertCost := s.convertCost
+    totalQ := s.totalQ }
+
+theorem procAccounted_drainProc {n m : Nat} (s : CoreState n m)
+    (plan : DrainPlan s) (p : ProcId n) :
+    procAccounted s.convertCost (drainProc s plan p) =
+      procAccounted s.convertCost (s.procs p) - plan.amount p := by
+  unfold procAccounted drainProc
+  grind
+
+theorem drain_conservation {n m : Nat} (s : CoreState n m)
+    (plan : DrainPlan s) :
+    accounted (drainStep s plan) = accounted s := by
+  unfold accounted drainStep
+  have hsum :
+      sumFin (fun p =>
+        procAccounted s.convertCost (drainProc s plan p)) =
+        sumFin (fun p =>
+          procAccounted s.convertCost (s.procs p)) -
+          sumFin plan.amount := by
+    calc
+      sumFin (fun p =>
+          procAccounted s.convertCost (drainProc s plan p)) =
+          sumFin (fun p =>
+            procAccounted s.convertCost (s.procs p) - plan.amount p) := by
+            apply sumFin_congr
+            intro p
+            exact procAccounted_drainProc s plan p
+      _ = sumFin (fun p => procAccounted s.convertCost (s.procs p)) -
+            sumFin plan.amount := by
+            exact sumFin_sub
+              (fun p => procAccounted s.convertCost (s.procs p))
+              plan.amount
+  grind
+
+theorem wf_drainStep {n m : Nat} (s : CoreState n m)
+    (plan : DrainPlan s) (h : CoreWF s) : CoreWF (drainStep s plan) := by
+  constructor
+  · exact h.cost_pos
+  · have hsum : 0 <= sumFin plan.amount :=
+      sumFin_nonneg plan.amount plan.amount_nonneg
+    have hr := h.reserve_nonneg
+    change 0 <= s.reserve + sumFin plan.amount
+    grind
+  · intro p
+    exact plan.stock_after_nonneg p
+  · intro p
+    simpa [drainStep, drainProc] using h.credit_nonneg p
+  · intro p
+    simpa [drainStep, drainProc] using h.rate_nonneg p
+  · intro p
+    simpa [drainStep, drainProc] using h.budget_le_cap p
+  · intro p
+    simpa [drainStep, drainProc] using h.since_le_total p
+  · intro p l hdone
+    apply h.done_holds_nothing p l
+    simpa [drainStep, drainProc] using hdone
+  · calc
+      accounted (drainStep s plan) = accounted s := drain_conservation s plan
+      _ = s.totalQ := h.accounted_eq_total
+
+structure YieldPlan {n m : Nat} (s : CoreState n m) where
+  amount : ProcId n -> Qty
+  amount_nonneg : forall p, 0 <= amount p
+  stock_after_nonneg : forall p, 0 <= (s.procs p).stock - amount p
+
+def yieldProc {n m : Nat} (s : CoreState n m)
+    (plan : YieldPlan s) (p : ProcId n) : CoreProc m :=
+  let old := s.procs p
+  { old with
+    stock := old.stock - plan.amount p
+    credit := old.credit + plan.amount p }
+
+def yieldStep {n m : Nat} (s : CoreState n m) (plan : YieldPlan s) :
+    CoreState n m :=
+  { procs := fun p => yieldProc s plan p
+    holds := s.holds
+    reserve := s.reserve
+    convertCost := s.convertCost
+    totalQ := s.totalQ }
+
+theorem procAccounted_yieldProc {n m : Nat} (s : CoreState n m)
+    (plan : YieldPlan s) (p : ProcId n) :
+    procAccounted s.convertCost (yieldProc s plan p) =
+      procAccounted s.convertCost (s.procs p) := by
+  unfold procAccounted yieldProc
+  grind
+
+theorem yield_conservation {n m : Nat} (s : CoreState n m)
+    (plan : YieldPlan s) :
+    accounted (yieldStep s plan) = accounted s := by
+  unfold accounted yieldStep
+  apply congrArg (fun x => s.reserve + x)
+  apply sumFin_congr
+  intro p
+  exact procAccounted_yieldProc s plan p
+
+theorem wf_yieldStep {n m : Nat} (s : CoreState n m)
+    (plan : YieldPlan s) (h : CoreWF s) : CoreWF (yieldStep s plan) := by
+  constructor
+  · exact h.cost_pos
+  · exact h.reserve_nonneg
+  · intro p
+    exact plan.stock_after_nonneg p
+  · intro p
+    have hcredit := h.credit_nonneg p
+    have hamount := plan.amount_nonneg p
+    change 0 <= (s.procs p).credit + plan.amount p
+    grind
+  · intro p
+    simpa [yieldStep, yieldProc] using h.rate_nonneg p
+  · intro p
+    simpa [yieldStep, yieldProc] using h.budget_le_cap p
+  · intro p
+    simpa [yieldStep, yieldProc] using h.since_le_total p
+  · intro p l hdone
+    apply h.done_holds_nothing p l
+    simpa [yieldStep, yieldProc] using hdone
+  · calc
+      accounted (yieldStep s plan) = accounted s := yield_conservation s plan
+      _ = s.totalQ := h.accounted_eq_total
+
+structure RoutePlan {n m : Nat} (s : CoreState n m) where
+  delta : ProcId n -> Qty
+  sum_delta_zero : sumFin delta = 0
+  stock_after_nonneg : forall p, 0 <= (s.procs p).stock + delta p
+  delta_blocked_nonpos : forall p, blocked s p -> delta p <= 0
+
+def routeProc {n m : Nat} (s : CoreState n m)
+    (plan : RoutePlan s) (p : ProcId n) : CoreProc m :=
+  let old := s.procs p
+  { old with stock := old.stock + plan.delta p }
+
+def routeStep {n m : Nat} (s : CoreState n m) (plan : RoutePlan s) :
+    CoreState n m :=
+  { procs := fun p => routeProc s plan p
+    holds := s.holds
+    reserve := s.reserve
+    convertCost := s.convertCost
+    totalQ := s.totalQ }
+
+theorem procAccounted_routeProc {n m : Nat} (s : CoreState n m)
+    (plan : RoutePlan s) (p : ProcId n) :
+    procAccounted s.convertCost (routeProc s plan p) =
+      procAccounted s.convertCost (s.procs p) + plan.delta p := by
+  unfold procAccounted routeProc
+  grind
+
+theorem route_conservation {n m : Nat} (s : CoreState n m)
+    (plan : RoutePlan s) :
+    accounted (routeStep s plan) = accounted s := by
+  unfold accounted routeStep
+  have hsum :
+      sumFin (fun p =>
+        procAccounted s.convertCost (routeProc s plan p)) =
+        sumFin (fun p =>
+          procAccounted s.convertCost (s.procs p)) +
+          sumFin plan.delta := by
+    calc
+      sumFin (fun p =>
+          procAccounted s.convertCost (routeProc s plan p)) =
+          sumFin (fun p =>
+            procAccounted s.convertCost (s.procs p) + plan.delta p) := by
+            apply sumFin_congr
+            intro p
+            exact procAccounted_routeProc s plan p
+      _ = sumFin (fun p => procAccounted s.convertCost (s.procs p)) +
+            sumFin plan.delta := by
+            exact sumFin_add
+              (fun p => procAccounted s.convertCost (s.procs p))
+              plan.delta
+  rw [hsum, plan.sum_delta_zero]
+  grind
+
+theorem wf_routeStep {n m : Nat} (s : CoreState n m)
+    (plan : RoutePlan s) (h : CoreWF s) : CoreWF (routeStep s plan) := by
+  constructor
+  · exact h.cost_pos
+  · exact h.reserve_nonneg
+  · intro p
+    exact plan.stock_after_nonneg p
+  · intro p
+    simpa [routeStep, routeProc] using h.credit_nonneg p
+  · intro p
+    simpa [routeStep, routeProc] using h.rate_nonneg p
+  · intro p
+    simpa [routeStep, routeProc] using h.budget_le_cap p
+  · intro p
+    simpa [routeStep, routeProc] using h.since_le_total p
+  · intro p l hdone
+    apply h.done_holds_nothing p l
+    simpa [routeStep, routeProc] using hdone
+  · calc
+      accounted (routeStep s plan) = accounted s := route_conservation s plan
+      _ = s.totalQ := h.accounted_eq_total
+
+/- A dependency conversion consumes stock at the runnable converter while
+recording the resulting work at the beneficiary whose wait path led there.
+Every positive return resolves that current wait episode: it clears the
+beneficiary's want and holds and refills its budget, even when more work remains.
+The attribution and episode resolution are state changes, not outcome-side
+payoff annotations. -/
+structure ConversionReturnPlan {n m : Nat} (s : CoreState n m) where
+  beneficiary : ProcId n
+  converter : ProcId n
+  units : Nat
+  endpoints_distinct : beneficiary ≠ converter
+  dependency_path : Relation.TransGen (blockedOn s) beneficiary converter
+  beneficiary_unfinished : unfinished s beneficiary
+  converter_runnable : runnable s converter
+  converter_unfinished : unfinished s converter
+  units_pos : 0 < units
+  within_work :
+    (s.procs beneficiary).convertedTotal + units <=
+      (s.procs beneficiary).workNeeded
+  converter_stock_after_nonneg :
+    0 <= (s.procs converter).stock -
+      s.convertCost * (units : Qty)
+
+def conversionReturnDone {n m : Nat} (s : CoreState n m)
+    (plan : ConversionReturnPlan s) : Bool :=
+  (s.procs plan.beneficiary).convertedTotal + plan.units ==
+    (s.procs plan.beneficiary).workNeeded
+
+theorem conversionReturnDone_eq_true_iff {n m : Nat} (s : CoreState n m)
+    (plan : ConversionReturnPlan s) :
+    conversionReturnDone s plan = true ↔
+      (s.procs plan.beneficiary).convertedTotal + plan.units =
+        (s.procs plan.beneficiary).workNeeded := by
+  simp [conversionReturnDone]
+
+def conversionReturnProc {n m : Nat} (s : CoreState n m)
+    (plan : ConversionReturnPlan s) (p : ProcId n) : CoreProc m :=
+  let old := s.procs p
+  if p = plan.beneficiary then
+    { old with
+      convertedTotal := old.convertedTotal + plan.units
+      convertedSinceRestart := old.convertedSinceRestart + plan.units
+      wants := none
+      budget := old.budgetCap
+      done := conversionReturnDone s plan }
+  else if p = plan.converter then
+    { old with
+      stock := old.stock - s.convertCost * (plan.units : Qty) }
+  else
+    old
+
+def conversionReturnStep {n m : Nat} (s : CoreState n m)
+    (plan : ConversionReturnPlan s) : CoreState n m :=
+  { procs := fun p => conversionReturnProc s plan p
+    holds := fun p l =>
+      if p = plan.beneficiary then false else s.holds p l
+    reserve := s.reserve
+    convertCost := s.convertCost
+    totalQ := s.totalQ }
+
+@[simp] theorem conversionReturnStep_beneficiary_convertedTotal
+    {n m : Nat} (s : CoreState n m) (plan : ConversionReturnPlan s) :
+    ((conversionReturnStep s plan).procs plan.beneficiary).convertedTotal =
+      (s.procs plan.beneficiary).convertedTotal + plan.units := by
+  simp [conversionReturnStep, conversionReturnProc]
+
+@[simp] theorem conversionReturnStep_beneficiary_convertedSinceRestart
+    {n m : Nat} (s : CoreState n m) (plan : ConversionReturnPlan s) :
+    ((conversionReturnStep s plan).procs
+        plan.beneficiary).convertedSinceRestart =
+      (s.procs plan.beneficiary).convertedSinceRestart + plan.units := by
+  simp [conversionReturnStep, conversionReturnProc]
+
+@[simp] theorem conversionReturnStep_beneficiary_wants
+    {n m : Nat} (s : CoreState n m) (plan : ConversionReturnPlan s) :
+    ((conversionReturnStep s plan).procs plan.beneficiary).wants = none := by
+  simp [conversionReturnStep, conversionReturnProc]
+
+theorem conversionReturnStep_beneficiary_done_iff
+    {n m : Nat} (s : CoreState n m) (plan : ConversionReturnPlan s) :
+    ((conversionReturnStep s plan).procs plan.beneficiary).done = true ↔
+      (s.procs plan.beneficiary).convertedTotal + plan.units =
+        (s.procs plan.beneficiary).workNeeded := by
+  simp [conversionReturnStep, conversionReturnProc,
+    conversionReturnDone_eq_true_iff]
+
+@[simp] theorem conversionReturnStep_beneficiary_holds
+    {n m : Nat} (s : CoreState n m) (plan : ConversionReturnPlan s)
+    (l : LockId m) :
+    (conversionReturnStep s plan).holds plan.beneficiary l = false := by
+  simp [conversionReturnStep]
+
+@[simp] theorem conversionReturnStep_converter_stock
+    {n m : Nat} (s : CoreState n m) (plan : ConversionReturnPlan s) :
+    ((conversionReturnStep s plan).procs plan.converter).stock =
+      (s.procs plan.converter).stock -
+        s.convertCost * (plan.units : Qty) := by
+  have hcb : plan.converter ≠ plan.beneficiary :=
+    Ne.symm plan.endpoints_distinct
+  simp [conversionReturnStep, conversionReturnProc, hcb]
+
+private theorem conversionReturn_sumFin_single {n : Nat}
+    (x : Fin n) (a : Qty) :
+    sumFin (fun r => if r = x then a else 0) = a := by
+  induction n with
+  | zero => exact Fin.elim0 x
+  | succ n ih =>
+      cases x using Fin.cases with
+      | zero =>
+          unfold sumFin
+          rw [List.finRange_succ]
+          have htail :
+              (List.map
+                ((fun r : Fin (n + 1) => if r = 0 then a else 0) ∘
+                  Fin.succ) (List.finRange n)).sum = 0 := by
+            induction (List.finRange n) with
+            | nil => rfl
+            | cons r rs ihl =>
+                simp [Function.comp_apply, Fin.succ_ne_zero r, ihl]
+                grind
+          simp [htail]
+          grind
+      | succ x =>
+          unfold sumFin
+          rw [List.finRange_succ]
+          have hfirst : ¬ ((0 : Fin (n + 1)) = Fin.succ x) := by
+            intro h
+            exact Fin.succ_ne_zero x h.symm
+          have htail :
+              (List.map
+                ((fun r : Fin (n + 1) =>
+                    if r = Fin.succ x then a else 0) ∘ Fin.succ)
+                  (List.finRange n)).sum =
+                (List.map (fun r : Fin n => if r = x then a else 0)
+                  (List.finRange n)).sum := by
+            apply congrArg List.sum
+            apply List.map_congr_left
+            intro r
+            by_cases h : r = x
+            · simp [Function.comp_apply, h]
+            · have hs : ¬ Fin.succ r = Fin.succ x := by
+                intro heq
+                apply h
+                apply Fin.ext
+                have hv := congrArg Fin.val heq
+                simp at hv
+                omega
+              simp [Function.comp_apply, h, hs]
+          simp [hfirst, htail]
+          change 0 + sumFin (fun r : Fin n => if r = x then a else 0) = a
+          rw [ih x]
+          grind
+
+private theorem conversionReturn_sumFin_pair {n : Nat}
+    {x y : Fin n} (hxy : x ≠ y) (a b : Qty) :
+    sumFin (fun r => if r = x then a else if r = y then b else 0) =
+      a + b := by
+  have hsplit :
+      sumFin (fun r => if r = x then a else if r = y then b else 0) =
+        sumFin (fun r => if r = x then a else 0) +
+          sumFin (fun r => if r = y then b else 0) := by
+    rw [← sumFin_add]
+    apply sumFin_congr
+    intro r
+    by_cases hx : r = x
+    · have hy : ¬ r = y := by
+        intro hry
+        exact hxy (hx.symm.trans hry)
+      simp [hx, hxy]
+      grind
+    · by_cases hy : r = y
+      · have hyx : ¬ y = x := Ne.symm hxy
+        simp [hy, hyx]
+        grind
+      · simp [hx, hy]
+        grind
+  rw [hsplit, conversionReturn_sumFin_single x a,
+    conversionReturn_sumFin_single y b]
+
+theorem conversionReturnProc_convertedTotal {n m : Nat}
+    (s : CoreState n m) (plan : ConversionReturnPlan s) (p : ProcId n) :
+    ((conversionReturnProc s plan p).convertedTotal : Qty) =
+      ((s.procs p).convertedTotal : Qty) +
+        if p = plan.beneficiary then (plan.units : Qty) else 0 := by
+  by_cases hb : p = plan.beneficiary
+  · simp [conversionReturnProc, hb]
+  · by_cases hc : p = plan.converter
+    · have hcb : plan.converter ≠ plan.beneficiary :=
+        Ne.symm plan.endpoints_distinct
+      simp [conversionReturnProc, hc, hcb]
+      grind
+    · simp [conversionReturnProc, hb, hc]
+      grind
+
+theorem totalConverted_conversionReturnStep {n m : Nat}
+    (s : CoreState n m) (plan : ConversionReturnPlan s) :
+    totalConverted (conversionReturnStep s plan) =
+      totalConverted s + (plan.units : Qty) := by
+  unfold totalConverted conversionReturnStep
+  calc
+    sumFin (fun p => ((conversionReturnProc s plan p).convertedTotal : Qty)) =
+        sumFin (fun p =>
+          ((s.procs p).convertedTotal : Qty) +
+            if p = plan.beneficiary then (plan.units : Qty) else 0) := by
+          apply sumFin_congr
+          intro p
+          exact conversionReturnProc_convertedTotal s plan p
+    _ = sumFin (fun p => ((s.procs p).convertedTotal : Qty)) +
+          sumFin (fun p =>
+            if p = plan.beneficiary then (plan.units : Qty) else 0) := by
+          exact sumFin_add
+            (fun p => ((s.procs p).convertedTotal : Qty))
+            (fun p =>
+              if p = plan.beneficiary then (plan.units : Qty) else 0)
+    _ = sumFin (fun p => ((s.procs p).convertedTotal : Qty)) +
+          (plan.units : Qty) := by
+          rw [conversionReturn_sumFin_single]
+
+theorem conversionReturnStep_totalConverted {n m : Nat}
+    (s : CoreState n m) (plan : ConversionReturnPlan s) :
+    totalConverted (conversionReturnStep s plan) =
+      totalConverted s + (plan.units : Qty) :=
+  totalConverted_conversionReturnStep s plan
+
+@[simp] theorem conversionReturnStep_convertCost {n m : Nat}
+    (s : CoreState n m) (plan : ConversionReturnPlan s) :
+    (conversionReturnStep s plan).convertCost = s.convertCost := by
+  rfl
+
+theorem procAccounted_conversionReturnProc {n m : Nat}
+    (s : CoreState n m) (plan : ConversionReturnPlan s) (p : ProcId n) :
+    procAccounted s.convertCost (conversionReturnProc s plan p) =
+      procAccounted s.convertCost (s.procs p) +
+        if p = plan.beneficiary then
+          s.convertCost * (plan.units : Qty)
+        else if p = plan.converter then
+          -(s.convertCost * (plan.units : Qty))
+        else 0 := by
+  unfold procAccounted conversionReturnProc
+  by_cases hb : p = plan.beneficiary
+  · simp [hb]
+    grind
+  · by_cases hc : p = plan.converter
+    · simp [hc]
+      grind
+    · simp [hb, hc]
+      grind
+
+theorem conversion_return_conservation {n m : Nat} (s : CoreState n m)
+    (plan : ConversionReturnPlan s) :
+    accounted (conversionReturnStep s plan) = accounted s := by
+  unfold accounted conversionReturnStep
+  have hsum :
+      sumFin (fun p =>
+        procAccounted s.convertCost (conversionReturnProc s plan p)) =
+        sumFin (fun p => procAccounted s.convertCost (s.procs p)) +
+          sumFin (fun p =>
+            if p = plan.beneficiary then
+              s.convertCost * (plan.units : Qty)
+            else if p = plan.converter then
+              -(s.convertCost * (plan.units : Qty))
+            else 0) := by
+    calc
+      sumFin (fun p =>
+          procAccounted s.convertCost (conversionReturnProc s plan p)) =
+          sumFin (fun p =>
+            procAccounted s.convertCost (s.procs p) +
+              if p = plan.beneficiary then
+                s.convertCost * (plan.units : Qty)
+              else if p = plan.converter then
+                -(s.convertCost * (plan.units : Qty))
+              else 0) := by
+            apply sumFin_congr
+            intro p
+            exact procAccounted_conversionReturnProc s plan p
+      _ = sumFin (fun p => procAccounted s.convertCost (s.procs p)) +
+            sumFin (fun p =>
+              if p = plan.beneficiary then
+                s.convertCost * (plan.units : Qty)
+              else if p = plan.converter then
+                -(s.convertCost * (plan.units : Qty))
+              else 0) := by
+            exact sumFin_add
+              (fun p => procAccounted s.convertCost (s.procs p))
+              (fun p =>
+                if p = plan.beneficiary then
+                  s.convertCost * (plan.units : Qty)
+                else if p = plan.converter then
+                  -(s.convertCost * (plan.units : Qty))
+                else 0)
+  rw [hsum, conversionReturn_sumFin_pair plan.endpoints_distinct]
+  grind
+
+theorem wf_conversionReturnStep {n m : Nat} (s : CoreState n m)
+    (plan : ConversionReturnPlan s) (h : CoreWF s) :
+    CoreWF (conversionReturnStep s plan) := by
+  constructor
+  · exact h.cost_pos
+  · exact h.reserve_nonneg
+  · intro p
+    by_cases hb : p = plan.beneficiary
+    · simpa [conversionReturnStep, conversionReturnProc, hb] using
+        h.stock_nonneg p
+    · by_cases hc : p = plan.converter
+      · have hcb : plan.converter ≠ plan.beneficiary :=
+          Ne.symm plan.endpoints_distinct
+        simpa [conversionReturnStep, conversionReturnProc, hc, hcb] using
+          plan.converter_stock_after_nonneg
+      · simpa [conversionReturnStep, conversionReturnProc, hb, hc] using
+          h.stock_nonneg p
+  · intro p
+    by_cases hb : p = plan.beneficiary
+    · simpa [conversionReturnStep, conversionReturnProc, hb] using
+        h.credit_nonneg p
+    · by_cases hc : p = plan.converter
+      · have hcb : plan.converter ≠ plan.beneficiary :=
+          Ne.symm plan.endpoints_distinct
+        simpa [conversionReturnStep, conversionReturnProc, hc, hcb] using
+          h.credit_nonneg p
+      · simpa [conversionReturnStep, conversionReturnProc, hb, hc] using
+          h.credit_nonneg p
+  · intro p
+    by_cases hb : p = plan.beneficiary
+    · simpa [conversionReturnStep, conversionReturnProc, hb] using
+        h.rate_nonneg p
+    · by_cases hc : p = plan.converter
+      · have hcb : plan.converter ≠ plan.beneficiary :=
+          Ne.symm plan.endpoints_distinct
+        simpa [conversionReturnStep, conversionReturnProc, hc, hcb] using
+          h.rate_nonneg p
+      · simpa [conversionReturnStep, conversionReturnProc, hb, hc] using
+          h.rate_nonneg p
+  · intro p
+    by_cases hb : p = plan.beneficiary
+    · simp [conversionReturnStep, conversionReturnProc, hb]
+    · by_cases hc : p = plan.converter
+      · have hcb : plan.converter ≠ plan.beneficiary :=
+          Ne.symm plan.endpoints_distinct
+        simpa [conversionReturnStep, conversionReturnProc, hc, hcb] using
+          h.budget_le_cap p
+      · simpa [conversionReturnStep, conversionReturnProc, hb, hc] using
+          h.budget_le_cap p
+  · intro p
+    by_cases hb : p = plan.beneficiary
+    · have hle := h.since_le_total p
+      have hnew :
+          (s.procs p).convertedSinceRestart + plan.units <=
+            (s.procs p).convertedTotal + plan.units := by
+        omega
+      simpa [conversionReturnStep, conversionReturnProc, hb] using hnew
+    · by_cases hc : p = plan.converter
+      · have hcb : plan.converter ≠ plan.beneficiary :=
+          Ne.symm plan.endpoints_distinct
+        simpa [conversionReturnStep, conversionReturnProc, hc, hcb] using
+          h.since_le_total p
+      · simpa [conversionReturnStep, conversionReturnProc, hb, hc] using
+          h.since_le_total p
+  · intro p l hdone
+    by_cases hb : p = plan.beneficiary
+    · simp [conversionReturnStep, hb]
+    · have hdone_source : (s.procs p).done = true := by
+        by_cases hc : p = plan.converter
+        · have hcb : plan.converter ≠ plan.beneficiary :=
+            Ne.symm plan.endpoints_distinct
+          simpa [conversionReturnStep, conversionReturnProc, hc, hcb] using hdone
+        · simpa [conversionReturnStep, conversionReturnProc, hb, hc] using hdone
+      have hhold := h.done_holds_nothing p l hdone_source
+      simpa [conversionReturnStep, hb] using hhold
+  · calc
+      accounted (conversionReturnStep s plan) = accounted s :=
+        conversion_return_conservation s plan
+      _ = s.totalQ := h.accounted_eq_total
+
+def acquireStep {n m : Nat} (s : CoreState n m)
+    (p : ProcId n) (l : LockId m) : CoreState n m :=
+  { s with
+    procs := fun q => if q = p then { s.procs q with wants := none } else s.procs q
+    holds := fun q k => if q = p /\ k = l then true else s.holds q k }
+
+def releaseStep {n m : Nat} (s : CoreState n m)
+    (p : ProcId n) (l : LockId m) : CoreState n m :=
+  { s with holds := fun q k => if q = p /\ k = l then false else s.holds q k }
+
+theorem acquire_conservation {n m : Nat} (s : CoreState n m)
+    (p : ProcId n) (l : LockId m) :
+    accounted (acquireStep s p l) = accounted s := by
+  unfold accounted acquireStep procAccounted
+  apply congrArg (fun x => s.reserve + x)
+  apply sumFin_congr
+  intro q
+  by_cases hq : q = p
+  · simp [hq]
+  · simp [hq]
+
+theorem release_conservation {n m : Nat} (s : CoreState n m)
+    (p : ProcId n) (l : LockId m) :
+    accounted (releaseStep s p l) = accounted s := by
+  rfl
+
+theorem wf_acquireStep {n m : Nat} (s : CoreState n m)
+    (actor : ProcId n) (lock : LockId m)
+    (hrun : runnable s actor) (h : CoreWF s) :
+    CoreWF (acquireStep s actor lock) := by
+  constructor
+  · exact h.cost_pos
+  · exact h.reserve_nonneg
+  · intro p
+    by_cases hp : p = actor
+    · simpa [acquireStep, hp] using h.stock_nonneg p
+    · simpa [acquireStep, hp] using h.stock_nonneg p
+  · intro p
+    by_cases hp : p = actor
+    · simpa [acquireStep, hp] using h.credit_nonneg p
+    · simpa [acquireStep, hp] using h.credit_nonneg p
+  · intro p
+    by_cases hp : p = actor
+    · simpa [acquireStep, hp] using h.rate_nonneg p
+    · simpa [acquireStep, hp] using h.rate_nonneg p
+  · intro p
+    by_cases hp : p = actor
+    · simpa [acquireStep, hp] using h.budget_le_cap p
+    · simpa [acquireStep, hp] using h.budget_le_cap p
+  · intro p
+    by_cases hp : p = actor
+    · simpa [acquireStep, hp] using h.since_le_total p
+    · simpa [acquireStep, hp] using h.since_le_total p
+  · intro p l hdone
+    by_cases hp : p = actor
+    · subst p
+      have hdone_source : (s.procs actor).done = true := by
+        simpa [acquireStep] using hdone
+      rw [hrun.1] at hdone_source
+      contradiction
+    · have hdone_source : (s.procs p).done = true := by
+        simpa [acquireStep, hp] using hdone
+      have hhold := h.done_holds_nothing p l hdone_source
+      simpa [acquireStep, hp] using hhold
+  · calc
+      accounted (acquireStep s actor lock) = accounted s :=
+        acquire_conservation s actor lock
+      _ = s.totalQ := h.accounted_eq_total
+
+theorem wf_releaseStep {n m : Nat} (s : CoreState n m)
+    (actor : ProcId n) (lock : LockId m) (h : CoreWF s) :
+    CoreWF (releaseStep s actor lock) := by
+  constructor
+  · exact h.cost_pos
+  · exact h.reserve_nonneg
+  · exact h.stock_nonneg
+  · exact h.credit_nonneg
+  · exact h.rate_nonneg
+  · exact h.budget_le_cap
+  · exact h.since_le_total
+  · intro p l hdone
+    unfold releaseStep
+    by_cases hreleased : p = actor /\ l = lock
+    · simp [hreleased]
+    · simp [hreleased]
+      exact h.done_holds_nothing p l hdone
+  · calc
+      accounted (releaseStep s actor lock) = accounted s :=
+        release_conservation s actor lock
+      _ = s.totalQ := h.accounted_eq_total
+
+def workStepOfWF {n m : Nat} (s : WFState n m)
+    (plan : WorkPlan s.state) : WFState n m :=
+  { state := workStep s.state plan
+    wf := wf_workStep s.state plan s.wf }
+
+def acquireStepOfWF {n m : Nat} (s : WFState n m)
+    (actor : ProcId n) (lock : LockId m)
+    (hrun : runnable s.state actor)
+    (_hfree : forall q, s.state.holds q lock = false) : WFState n m :=
+  { state := acquireStep s.state actor lock
+    wf := wf_acquireStep s.state actor lock hrun s.wf }
+
+def execReleaseStepOfWF {n m : Nat} (s : WFState n m)
+    (actor : ProcId n) (lock : LockId m)
+    (_hrun : runnable s.state actor) : WFState n m :=
+  { state := releaseStep s.state actor lock
+    wf := wf_releaseStep s.state actor lock s.wf }
+
+def drainStepOfWF {n m : Nat} (s : WFState n m)
+    (plan : DrainPlan s.state) : WFState n m :=
+  { state := drainStep s.state plan
+    wf := wf_drainStep s.state plan s.wf }
+
+def yieldStepOfWF {n m : Nat} (s : WFState n m)
+    (plan : YieldPlan s.state) : WFState n m :=
+  { state := yieldStep s.state plan
+    wf := wf_yieldStep s.state plan s.wf }
+
+def routeStepOfWF {n m : Nat} (s : WFState n m)
+    (plan : RoutePlan s.state) : WFState n m :=
+  { state := routeStep s.state plan
+    wf := wf_routeStep s.state plan s.wf }
+
+def conversionReturnStepOfWF {n m : Nat} (s : WFState n m)
+    (plan : ConversionReturnPlan s.state) : WFState n m :=
+  { state := conversionReturnStep s.state plan
+    wf := wf_conversionReturnStep s.state plan s.wf }
+
+def claimReleaseStepOfWF {n m : Nat} (s : WFState n m)
+    (actor : ProcId n) (lock : LockId m) : WFState n m :=
+  { state := releaseStep s.state actor lock
+    wf := wf_releaseStep s.state actor lock s.wf }
+
+def WorkRel {n m : Nat} (s t : WFState n m) : Prop :=
+  exists plan : WorkPlan s.state, t.state = workStep s.state plan
+
+def ExecAcquireRel {n m : Nat} (s t : WFState n m) : Prop :=
+  exists p l, runnable s.state p /\ (forall q, s.state.holds q l = false) /\
+    t.state = acquireStep s.state p l
+
+def ExecReleaseRel {n m : Nat} (s t : WFState n m) : Prop :=
+  exists p l, runnable s.state p /\ t.state = releaseStep s.state p l
+
+def ExecFlowRel {n m : Nat} := @WorkRel n m
+
+def ExecRel {n m : Nat} (s t : WFState n m) : Prop :=
+  WorkRel s t \/ ExecAcquireRel s t \/ ExecReleaseRel s t
+
+def DrainRel {n m : Nat} (s t : WFState n m) : Prop :=
+  exists plan : DrainPlan s.state, t.state = drainStep s.state plan
+
+def YieldRel {n m : Nat} (s t : WFState n m) : Prop :=
+  exists plan : YieldPlan s.state, t.state = yieldStep s.state plan
+
+def RouteRel {n m : Nat} (s t : WFState n m) : Prop :=
+  exists plan : RoutePlan s.state, t.state = routeStep s.state plan
+
+def ConversionReturnRel {n m : Nat} (s t : WFState n m) : Prop :=
+  exists plan : ConversionReturnPlan s.state,
+    t.state = conversionReturnStep s.state plan
+
+def ReleaseClaimRel {n m : Nat} (s t : WFState n m) : Prop :=
+  exists p l, t.state = releaseStep s.state p l
+
+def CureRel {n m : Nat} (s t : WFState n m) : Prop :=
+  DrainRel s t \/ YieldRel s t \/ RouteRel s t \/ ReleaseClaimRel s t \/
+    ConversionReturnRel s t
+
+def CoreRel {n m : Nat} (s t : WFState n m) : Prop :=
+  ExecRel s t \/ CureRel s t
+
+theorem workStepOfWF_is_workRel {n m : Nat} (s : WFState n m)
+    (plan : WorkPlan s.state) : WorkRel s (workStepOfWF s plan) := by
+  exact ⟨plan, rfl⟩
+
+theorem acquireStepOfWF_is_execAcquireRel {n m : Nat} (s : WFState n m)
+    (actor : ProcId n) (lock : LockId m)
+    (hrun : runnable s.state actor)
+    (hfree : forall q, s.state.holds q lock = false) :
+    ExecAcquireRel s (acquireStepOfWF s actor lock hrun hfree) := by
+  exact ⟨actor, lock, hrun, hfree, rfl⟩
+
+theorem execReleaseStepOfWF_is_execReleaseRel {n m : Nat}
+    (s : WFState n m) (actor : ProcId n) (lock : LockId m)
+    (hrun : runnable s.state actor) :
+    ExecReleaseRel s (execReleaseStepOfWF s actor lock hrun) := by
+  exact ⟨actor, lock, hrun, rfl⟩
+
+theorem drainStepOfWF_is_drainRel {n m : Nat} (s : WFState n m)
+    (plan : DrainPlan s.state) : DrainRel s (drainStepOfWF s plan) := by
+  exact ⟨plan, rfl⟩
+
+theorem yieldStepOfWF_is_yieldRel {n m : Nat} (s : WFState n m)
+    (plan : YieldPlan s.state) : YieldRel s (yieldStepOfWF s plan) := by
+  exact ⟨plan, rfl⟩
+
+theorem routeStepOfWF_is_routeRel {n m : Nat} (s : WFState n m)
+    (plan : RoutePlan s.state) : RouteRel s (routeStepOfWF s plan) := by
+  exact ⟨plan, rfl⟩
+
+theorem conversionReturnStepOfWF_is_conversionReturnRel {n m : Nat}
+    (s : WFState n m) (plan : ConversionReturnPlan s.state) :
+    ConversionReturnRel s (conversionReturnStepOfWF s plan) := by
+  exact ⟨plan, rfl⟩
+
+theorem claimReleaseStepOfWF_is_releaseClaimRel {n m : Nat}
+    (s : WFState n m) (actor : ProcId n) (lock : LockId m) :
+    ReleaseClaimRel s (claimReleaseStepOfWF s actor lock) := by
+  exact ⟨actor, lock, rfl⟩
+
+theorem exec_step_conserves_accounted {n m : Nat} {s t : WFState n m}
+    (h : ExecRel s t) : accounted t.state = accounted s.state := by
+  rcases h with hwork | hacq | hrel
+  · rcases hwork with ⟨plan, ht⟩
+    rw [ht]
+    exact work_conservation s.state plan
+  · rcases hacq with ⟨p, l, _hrun, _hfree, ht⟩
+    rw [ht]
+    exact acquire_conservation s.state p l
+  · rcases hrel with ⟨p, l, _hrun, ht⟩
+    rw [ht]
+    exact release_conservation s.state p l
+
+theorem cure_preserves_accounted {n m : Nat} {s t : WFState n m}
+    (h : CureRel s t) : accounted t.state = accounted s.state := by
+  rcases h with hdrain | hyield | hroute | hrelease | hreturn
+  · rcases hdrain with ⟨plan, ht⟩
+    rw [ht]
+    exact drain_conservation s.state plan
+  · rcases hyield with ⟨plan, ht⟩
+    rw [ht]
+    exact yield_conservation s.state plan
+  · rcases hroute with ⟨plan, ht⟩
+    rw [ht]
+    exact route_conservation s.state plan
+  · rcases hrelease with ⟨p, l, ht⟩
+    rw [ht]
+    exact release_conservation s.state p l
+  · rcases hreturn with ⟨plan, ht⟩
+    rw [ht]
+    exact conversion_return_conservation s.state plan
+
+theorem core_step_conserves_accounted {n m : Nat} {s t : WFState n m} :
+    CoreRel s t -> accounted t.state = accounted s.state := by
+  intro h
+  cases h with
+  | inl hexec => exact exec_step_conserves_accounted hexec
+  | inr hcure => exact cure_preserves_accounted hcure
+
+theorem core_step_preserves_totalQ {n m : Nat} {s t : WFState n m}
+    (h : CoreRel s t) : t.state.totalQ = s.state.totalQ := by
+  rcases h with hexec | hcure
+  · rcases hexec with hwork | hacq | hrel
+    · rcases hwork with ⟨plan, ht⟩
+      rw [ht]
+      rfl
+    · rcases hacq with ⟨p, l, _hrun, _hfree, ht⟩
+      rw [ht]
+      rfl
+    · rcases hrel with ⟨p, l, _hrun, ht⟩
+      rw [ht]
+      rfl
+  · rcases hcure with hdrain | hyield | hroute | hrelease | hreturn
+    · rcases hdrain with ⟨plan, ht⟩
+      rw [ht]
+      rfl
+    · rcases hyield with ⟨plan, ht⟩
+      rw [ht]
+      rfl
+    · rcases hroute with ⟨plan, ht⟩
+      rw [ht]
+      rfl
+    · rcases hrelease with ⟨p, l, ht⟩
+      rw [ht]
+      rfl
+    · rcases hreturn with ⟨plan, ht⟩
+      rw [ht]
+      rfl
+
+theorem core_reachable_conserves_accounted {n m : Nat}
+    {s t : WFState n m} (reach : RTC CoreRel s t) :
+    accounted t.state = accounted s.state := by
+  induction reach with
+  | refl => rfl
+  | tail reach hstep ih =>
+      calc
+        accounted _ = accounted _ := core_step_conserves_accounted hstep
+        _ = accounted s.state := ih
+
+theorem core_reachable_preserves_totalQ {n m : Nat}
+    {s t : WFState n m} (reach : RTC CoreRel s t) :
+    t.state.totalQ = s.state.totalQ := by
+  induction reach with
+  | refl => rfl
+  | tail reach hstep ih =>
+      calc
+        _ = _ := core_step_preserves_totalQ hstep
+        _ = s.state.totalQ := ih
+
+def NoProgressRel {n m : Nat} (s t : WFState n m) : Prop :=
+  DrainRel s t \/ YieldRel s t
+
+theorem runnable_drainStep {n m : Nat} (s : CoreState n m)
+    (plan : DrainPlan s) (p : ProcId n) :
+    runnable (drainStep s plan) p ↔ runnable s p := by
+  unfold runnable blocked blockedOn drainStep drainProc
+  simp
+
+theorem runnable_yieldStep {n m : Nat} (s : CoreState n m)
+    (plan : YieldPlan s) (p : ProcId n) :
+    runnable (yieldStep s plan) p ↔ runnable s p := by
+  unfold runnable blocked blockedOn yieldStep yieldProc
+  simp
+
+theorem convertibleStock_drainStep_le {n m : Nat} (s : CoreState n m)
+    (plan : DrainPlan s) :
+    convertibleStock (drainStep s plan) <= convertibleStock s := by
+  unfold convertibleStock
+  apply sumFin_le
+  intro p
+  by_cases hr : runnable s p
+  · have hrt : runnable (drainStep s plan) p := (runnable_drainStep s plan p).2 hr
+    have ha := plan.amount_nonneg p
+    have hle :
+        (s.procs p).stock - plan.amount p <= (s.procs p).stock := by
+      grind
+    simpa [hr, hrt] using hle
+  · have hrt : ¬ runnable (drainStep s plan) p := by
+      intro h
+      exact hr ((runnable_drainStep s plan p).1 h)
+    simp [hr, hrt]
+
+theorem convertibleStock_yieldStep_le {n m : Nat} (s : CoreState n m)
+    (plan : YieldPlan s) :
+    convertibleStock (yieldStep s plan) <= convertibleStock s := by
+  unfold convertibleStock
+  apply sumFin_le
+  intro p
+  by_cases hr : runnable s p
+  · have hrt : runnable (yieldStep s plan) p := (runnable_yieldStep s plan p).2 hr
+    have ha := plan.amount_nonneg p
+    have hle :
+        (s.procs p).stock - plan.amount p <= (s.procs p).stock := by
+      grind
+    simpa [hr, hrt] using hle
+  · have hrt : ¬ runnable (yieldStep s plan) p := by
+      intro h
+      exact hr ((runnable_yieldStep s plan p).1 h)
+    simp [hr, hrt]
+
+theorem noProgress_step_convertibleStock_le {n m : Nat}
+    {s t : WFState n m} (h : NoProgressRel s t) :
+    convertibleStock t.state <= convertibleStock s.state := by
+  rcases h with hdrain | hyield
+  · rcases hdrain with ⟨plan, ht⟩
+    rw [ht]
+    exact convertibleStock_drainStep_le s.state plan
+  · rcases hyield with ⟨plan, ht⟩
+    rw [ht]
+    exact convertibleStock_yieldStep_le s.state plan
+
+theorem no_progress_convertible_stock_monotone {n m : Nat}
+    {s t : WFState n m} (reach : RTC NoProgressRel s t) :
+    convertibleStock t.state <= convertibleStock s.state := by
+  apply monotone_under_adversary
+    (le := fun a b : Qty => a <= b)
+    (leRefl := fun a => by grind)
+    (leTrans := by
+      intro a b c hab hbc
+      grind)
+    (E := NoProgressRel)
+    (f := fun s => convertibleStock s.state)
+  · intro s t hstep
+    exact noProgress_step_convertibleStock_le hstep
+  · exact reach
+
+theorem canConvert_false_of_blocked {n m : Nat} {s : CoreState n m}
+    {p : ProcId n} (hb : blocked s p) :
+    ¬ canConvert s p := by
+  intro hc
+  exact hc.1.2 hb
+
+theorem not_runnable_of_blocked {n m : Nat} {s : CoreState n m}
+    {p : ProcId n} (hb : blocked s p) :
+    ¬ runnable s p := by
+  intro hr
+  exact hr.2 hb
+
+theorem workStep_stock_eq_of_blocked {n m : Nat} {s : CoreState n m}
+    (plan : WorkPlan s) {p : ProcId n} (hb : blocked s p) :
+    ((workStep s plan).procs p).stock = (s.procs p).stock := by
+  unfold workStep workProc
+  have hflow := plan.flow_only_runnable p (not_runnable_of_blocked hb)
+  have hconv := plan.convert_only_canConvert p (canConvert_false_of_blocked hb)
+  simp [hflow, hconv]
+  grind
+
+theorem drainStep_stock_le_of_blocked {n m : Nat} {s : CoreState n m}
+    (plan : DrainPlan s) {p : ProcId n} (_hb : blocked s p) :
+    ((drainStep s plan).procs p).stock <= (s.procs p).stock := by
+  unfold drainStep drainProc
+  have ha := plan.amount_nonneg p
+  grind
+
+theorem yieldStep_stock_le_of_blocked {n m : Nat} {s : CoreState n m}
+    (plan : YieldPlan s) {p : ProcId n} (_hb : blocked s p) :
+    ((yieldStep s plan).procs p).stock <= (s.procs p).stock := by
+  unfold yieldStep yieldProc
+  have ha := plan.amount_nonneg p
+  grind
+
+theorem routeStep_stock_le_of_blocked {n m : Nat} {s : CoreState n m}
+    (plan : RoutePlan s) {p : ProcId n} (hb : blocked s p) :
+    ((routeStep s plan).procs p).stock <= (s.procs p).stock := by
+  unfold routeStep routeProc
+  have hd := plan.delta_blocked_nonpos p hb
+  grind
+
+theorem conversionReturnStep_stock_le {n m : Nat} {s : CoreState n m}
+    (plan : ConversionReturnPlan s) (h : CoreWF s) (p : ProcId n) :
+    ((conversionReturnStep s plan).procs p).stock <= (s.procs p).stock := by
+  have hcost : 0 <= s.convertCost := Rat.le_of_lt h.cost_pos
+  have hunits : (0 : Qty) <= (plan.units : Qty) := by grind
+  have hspent : 0 <= s.convertCost * (plan.units : Qty) :=
+    Rat.mul_nonneg hcost hunits
+  by_cases hb : p = plan.beneficiary
+  · simp [conversionReturnStep, conversionReturnProc, hb]
+  · by_cases hc : p = plan.converter
+    · have hcb : plan.converter ≠ plan.beneficiary :=
+        Ne.symm plan.endpoints_distinct
+      simp [conversionReturnStep, conversionReturnProc, hc, hcb]
+      grind
+    · simp [conversionReturnStep, conversionReturnProc, hb, hc]
+
+theorem acquireStep_stock_eq {n m : Nat} (s : CoreState n m)
+    (a : ProcId n) (l : LockId m) (p : ProcId n) :
+    ((acquireStep s a l).procs p).stock = (s.procs p).stock := by
+  unfold acquireStep
+  by_cases hp : p = a
+  · simp [hp]
+  · simp [hp]
+
+theorem releaseStep_stock_eq {n m : Nat} (s : CoreState n m)
+    (a : ProcId n) (l : LockId m) (p : ProcId n) :
+    ((releaseStep s a l).procs p).stock = (s.procs p).stock := by
+  rfl
+
+theorem core_step_blocked_stock_le {n m : Nat} {s t : WFState n m}
+    (p : ProcId n) (hb : blocked s.state p) (h : CoreRel s t) :
+    (t.state.procs p).stock <= (s.state.procs p).stock := by
+  rcases h with hexec | hcure
+  · rcases hexec with hwork | hacq | hrel
+    · rcases hwork with ⟨plan, ht⟩
+      rw [ht, workStep_stock_eq_of_blocked plan hb]
+      grind
+    · rcases hacq with ⟨a, l, _hrun, _hfree, ht⟩
+      rw [ht, acquireStep_stock_eq s.state a l p]
+      grind
+    · rcases hrel with ⟨a, l, _hrun, ht⟩
+      rw [ht, releaseStep_stock_eq s.state a l p]
+      grind
+  · rcases hcure with hdrain | hyield | hroute | hrelease | hreturn
+    · rcases hdrain with ⟨plan, ht⟩
+      rw [ht]
+      exact drainStep_stock_le_of_blocked plan hb
+    · rcases hyield with ⟨plan, ht⟩
+      rw [ht]
+      exact yieldStep_stock_le_of_blocked plan hb
+    · rcases hroute with ⟨plan, ht⟩
+      rw [ht]
+      exact routeStep_stock_le_of_blocked plan hb
+    · rcases hrelease with ⟨a, l, ht⟩
+      rw [ht, releaseStep_stock_eq s.state a l p]
+      grind
+    · rcases hreturn with ⟨plan, ht⟩
+      rw [ht]
+      exact conversionReturnStep_stock_le plan s.wf p
+
+def BlockedPreservingRel {n m : Nat} (p : ProcId n)
+    (s t : WFState n m) : Prop :=
+  CoreRel s t /\ blocked s.state p /\ blocked t.state p
+
+theorem blocked_stock_monotone {n m : Nat} (p : ProcId n)
+    {s t : WFState n m} (reach : RTC (BlockedPreservingRel p) s t) :
+    (t.state.procs p).stock <= (s.state.procs p).stock := by
+  apply monotone_under_adversary
+    (le := fun a b : Qty => a <= b)
+    (leRefl := fun a => by grind)
+    (leTrans := by
+      intro a b c hab hbc
+      grind)
+    (E := BlockedPreservingRel p)
+    (f := fun s => (s.state.procs p).stock)
+  · intro s t hstep
+    exact core_step_blocked_stock_le p hstep.2.1 hstep.1
+  · exact reach
+
+theorem flow_leaves_blocked_stock_unchanged {n m : Nat}
+    {s t : WFState n m} {p : ProcId n}
+    (hb : blocked s.state p) (h : ExecFlowRel s t) :
+    (t.state.procs p).stock = (s.state.procs p).stock := by
+  rcases h with ⟨plan, ht⟩
+  rw [ht]
+  exact workStep_stock_eq_of_blocked plan hb
+
+theorem closedDependencySet_not_runnable {n m : Nat}
+    {s : CoreState n m} {C : ProcId n -> Bool}
+    (hC : ClosedDependencySet s C) {p : ProcId n} (hp : C p = true) :
+    ¬ runnable s p := by
+  intro hr
+  rcases (hC p hp).2 with ⟨q, _hq, hblock⟩
+  exact hr.2 ⟨q, hblock⟩
+
+theorem canConvert_false_of_closed {n m : Nat}
+    {s : CoreState n m} {C : ProcId n -> Bool}
+    (hC : ClosedDependencySet s C) {p : ProcId n} (hp : C p = true) :
+    ¬ canConvert s p := by
+  intro hc
+  exact (closedDependencySet_not_runnable hC hp) hc.1
+
+theorem doneAfterWork_false_of_closed {n m : Nat}
+    {s : CoreState n m} (plan : WorkPlan s)
+    {C : ProcId n -> Bool} (hC : ClosedDependencySet s C)
+    {p : ProcId n} (hp : C p = true) :
+    doneAfterWork s plan p = false := by
+  unfold doneAfterWork
+  have hdone : (s.procs p).done = false := (hC p hp).1.1
+  have hconv := plan.convert_only_canConvert p (canConvert_false_of_closed hC hp)
+  simp [hdone, hconv]
+
+theorem closedDependencySet_workStep {n m : Nat}
+    {s : CoreState n m} (plan : WorkPlan s)
+    {C : ProcId n -> Bool} (hC : ClosedDependencySet s C) :
+    ClosedDependencySet (workStep s plan) C := by
+  intro p hp
+  constructor
+  · unfold unfinished workStep workProc
+    have hdone := doneAfterWork_false_of_closed plan hC hp
+    have hconv := plan.convert_only_canConvert p (canConvert_false_of_closed hC hp)
+    have hlt : (s.procs p).convertedTotal < (s.procs p).workNeeded := (hC p hp).1.2
+    simp [hdone, hconv]
+    exact hlt
+  · rcases (hC p hp).2 with ⟨q, hq, hblock⟩
+    rcases hblock with ⟨l, hwant, hhold, hneq⟩
+    refine ⟨q, hq, ?_⟩
+    refine ⟨l, ?_, ?_, hneq⟩
+    · unfold workStep workProc
+      simp [hwant]
+    · unfold workStep
+      simp [hhold]
+
+theorem totalConvertedIn_workStep_eq_of_closed {n m : Nat}
+    {s : CoreState n m} (plan : WorkPlan s)
+    {C : ProcId n -> Bool} (hC : ClosedDependencySet s C) :
+    totalConvertedIn C (workStep s plan) = totalConvertedIn C s := by
+  unfold totalConvertedIn workStep workProc
+  apply sumFin_congr
+  intro p
+  by_cases hp : C p = true
+  · have hconv := plan.convert_only_canConvert p (canConvert_false_of_closed hC hp)
+    simp [hp, hconv]
+  · have hf : C p = false := by
+      cases h : C p
+      · rfl
+      · exact False.elim (hp h)
+    simp [hf]
+
+theorem acquire_actor_not_mem_closed {n m : Nat}
+    {s : CoreState n m} {C : ProcId n -> Bool}
+    (hC : ClosedDependencySet s C) {a : ProcId n}
+    (hrun : runnable s a) : C a = false := by
+  cases h : C a
+  · rfl
+  · exfalso
+    exact (closedDependencySet_not_runnable hC h) hrun
+
+theorem closedDependencySet_acquireStep {n m : Nat}
+    {s : CoreState n m} {C : ProcId n -> Bool}
+    (hC : ClosedDependencySet s C)
+    {a : ProcId n} {l : LockId m} (hrun : runnable s a) :
+    ClosedDependencySet (acquireStep s a l) C := by
+  intro p hp
+  constructor
+  · unfold unfinished acquireStep
+    by_cases hpa : p = a
+    · have ha_false := acquire_actor_not_mem_closed hC hrun
+      subst hpa
+      simp [ha_false] at hp
+    · simp [hpa]
+      exact (hC p hp).1
+  · rcases (hC p hp).2 with ⟨q, hq, hblock⟩
+    rcases hblock with ⟨k, hwant, hhold, hneq⟩
+    refine ⟨q, hq, ?_⟩
+    refine ⟨k, ?_, ?_, hneq⟩
+    · unfold acquireStep
+      by_cases hpa : p = a
+      · have ha_false := acquire_actor_not_mem_closed hC hrun
+        subst hpa
+        simp [ha_false] at hp
+      · simp [hpa, hwant]
+    · unfold acquireStep
+      by_cases hqa : q = a
+      · subst hqa
+        have ha_false := acquire_actor_not_mem_closed hC hrun
+        simp [ha_false] at hq
+      · simp [hqa, hhold]
+
+theorem closedDependencySet_releaseStep {n m : Nat}
+    {s : CoreState n m} {C : ProcId n -> Bool}
+    (hC : ClosedDependencySet s C)
+    {a : ProcId n} {l : LockId m} (hrun : runnable s a) :
+    ClosedDependencySet (releaseStep s a l) C := by
+  intro p hp
+  constructor
+  · unfold unfinished releaseStep
+    exact (hC p hp).1
+  · rcases (hC p hp).2 with ⟨q, hq, hblock⟩
+    rcases hblock with ⟨k, hwant, hhold, hneq⟩
+    refine ⟨q, hq, ?_⟩
+    refine ⟨k, hwant, ?_, hneq⟩
+    unfold releaseStep
+    by_cases hqa : q = a
+    · subst hqa
+      have ha_false := acquire_actor_not_mem_closed hC hrun
+      simp [ha_false] at hq
+    · simp [hqa, hhold]
+
+theorem closed_wait_set_exec_step {n m : Nat}
+    {s t : WFState n m} {C : ProcId n -> Bool}
+    (hC : ClosedDependencySet s.state C) (h : ExecRel s t) :
+    ClosedDependencySet t.state C := by
+  rcases h with hwork | hacq | hrel
+  · rcases hwork with ⟨plan, ht⟩
+    rw [ht]
+    exact closedDependencySet_workStep plan hC
+  · rcases hacq with ⟨a, l, hrun, _hfree, ht⟩
+    rw [ht]
+    exact closedDependencySet_acquireStep hC hrun
+  · rcases hrel with ⟨a, l, hrun, ht⟩
+    rw [ht]
+    exact closedDependencySet_releaseStep hC hrun
+
+theorem closed_wait_set_exec_absorbing {n m : Nat}
+    {s t : WFState n m} {C : ProcId n -> Bool}
+    (hC : ClosedDependencySet s.state C) (reach : RTC ExecRel s t) :
+    ClosedDependencySet t.state C := by
+  induction reach with
+  | refl => exact hC
+  | tail reach hstep ih =>
+      exact closed_wait_set_exec_step ih hstep
+
+theorem totalConvertedIn_acquireStep {n m : Nat} (s : CoreState n m)
+    (C : ProcId n -> Bool) (a : ProcId n) (l : LockId m) :
+    totalConvertedIn C (acquireStep s a l) = totalConvertedIn C s := by
+  unfold totalConvertedIn acquireStep
+  apply sumFin_congr
+  intro p
+  by_cases hp : p = a
+  · simp [hp]
+  · simp [hp]
+
+theorem totalConvertedIn_releaseStep {n m : Nat} (s : CoreState n m)
+    (C : ProcId n -> Bool) (a : ProcId n) (l : LockId m) :
+    totalConvertedIn C (releaseStep s a l) = totalConvertedIn C s := by
+  rfl
+
+theorem totalConvertedIn_exec_step_eq_of_closed {n m : Nat}
+    {s t : WFState n m} {C : ProcId n -> Bool}
+    (hC : ClosedDependencySet s.state C) (h : ExecRel s t) :
+    totalConvertedIn C t.state = totalConvertedIn C s.state := by
+  rcases h with hwork | hacq | hrel
+  · rcases hwork with ⟨plan, ht⟩
+    rw [ht]
+    exact totalConvertedIn_workStep_eq_of_closed plan hC
+  · rcases hacq with ⟨a, l, _hrun, _hfree, ht⟩
+    rw [ht]
+    exact totalConvertedIn_acquireStep s.state C a l
+  · rcases hrel with ⟨a, l, _hrun, ht⟩
+    rw [ht]
+    exact totalConvertedIn_releaseStep s.state C a l
+
+theorem closed_wait_set_converted_total_fixed {n m : Nat}
+    {s t : WFState n m} {C : ProcId n -> Bool}
+    (hC : ClosedDependencySet s.state C) (reach : RTC ExecRel s t) :
+    totalConvertedIn C t.state = totalConvertedIn C s.state := by
+  induction reach with
+  | refl => rfl
+  | tail reach hstep ih =>
+      have hCmid := closed_wait_set_exec_absorbing hC reach
+      calc
+        totalConvertedIn C _ = totalConvertedIn C _ :=
+          totalConvertedIn_exec_step_eq_of_closed hCmid hstep
+        _ = totalConvertedIn C s.state := ih
+
+theorem workStep_eq_of_atTableEmpty {n m : Nat}
+    {s : CoreState n m} (plan : WorkPlan s) (h : atTableEmpty s) :
+    workStep s plan = s := by
+  cases s with
+  | mk procs holds reserve convertCost totalQ =>
+      simp [workStep, workProc, doneAfterWork, atTableEmpty] at h ⊢
+      constructor
+      · funext p
+        have hnotrun : ¬ runnable
+            { procs := procs, holds := holds, reserve := reserve,
+              convertCost := convertCost, totalQ := totalQ } p := h p
+        have hflow := plan.flow_only_runnable p hnotrun
+        have hconv := plan.convert_only_canConvert p (by
+          intro hc
+          exact hnotrun hc.1)
+        cases procs p
+        simp [hflow, hconv]
+        grind
+      · have hsum :
+            sumFin plan.flow = 0 := by
+          calc
+            sumFin plan.flow = sumFin (fun _ : ProcId n => (0 : Qty)) := by
+              apply sumFin_congr
+              intro p
+              have hnotrun : ¬ runnable
+                  { procs := procs, holds := holds, reserve := reserve,
+                    convertCost := convertCost, totalQ := totalQ } p := h p
+              exact plan.flow_only_runnable p hnotrun
+            _ = 0 := sumFin_zero
+        grind
+
+theorem exec_step_deadlocked_fixed {n m : Nat}
+    {s t : WFState n m} (hd : Deadlocked s.state) (h : ExecRel s t) :
+    t.state = s.state := by
+  rcases h with hwork | hacq | hrel
+  · rcases hwork with ⟨plan, ht⟩
+    rw [ht]
+    exact workStep_eq_of_atTableEmpty plan hd.1
+  · rcases hacq with ⟨p, _l, hrun, _hfree, _ht⟩
+    exact False.elim ((hd.1 p) hrun)
+  · rcases hrel with ⟨p, _l, hrun, _ht⟩
+    exact False.elim ((hd.1 p) hrun)
+
+theorem deadlock_exec_fixed {n m : Nat}
+    {s t : WFState n m} (hd : Deadlocked s.state)
+    (reach : RTC ExecRel s t) :
+    t.state = s.state := by
+  induction reach with
+  | refl => rfl
+  | tail reach hstep ih =>
+      rcases hstep with hwork | hacq | hrel
+      · rcases hwork with ⟨plan, ht⟩
+        have hfixed := workStep_eq_of_atTableEmpty plan (by
+          rw [ih]
+          exact hd.1)
+        rw [ht, hfixed, ih]
+      · rcases hacq with ⟨p, _l, hrun, _hfree, _ht⟩
+        exact False.elim ((show ¬ runnable _ p from by
+          rw [ih]
+          exact hd.1 p) hrun)
+      · rcases hrel with ⟨p, _l, hrun, _ht⟩
+        exact False.elim ((show ¬ runnable _ p from by
+          rw [ih]
+          exact hd.1 p) hrun)
+
+inductive ExecEvent (n m : Nat) where
+  | work (flow spent : ProcId n -> Qty)
+  | flow (delta : ProcId n -> Qty)
+  | convert (spent : ProcId n -> Qty)
+  | acquire (p : ProcId n) (l : LockId m)
+  | releaseNormally (p : ProcId n) (l : LockId m)
+
+inductive CureEvent (n m : Nat) where
+  | route (delta : ProcId n -> Qty)
+  | drain (amount : ProcId n -> Qty)
+  | yield (amount : ProcId n -> Qty)
+  | releaseClaim (p : ProcId n) (l : LockId m)
+  | conversionReturn (beneficiary converter : ProcId n) (spent : Qty)
+
+inductive StepEvent (n m : Nat) where
+  | exec : ExecEvent n m -> StepEvent n m
+  | cure : CureEvent n m -> StepEvent n m
+
+def stockDelta {n m : Nat} (e : StepEvent n m) (p : ProcId n) : Qty :=
+  match e with
+  | StepEvent.exec (ExecEvent.work flow spent) => flow p - spent p
+  | StepEvent.exec (ExecEvent.flow delta) => delta p
+  | StepEvent.exec (ExecEvent.convert spent) => -spent p
+  | StepEvent.exec (ExecEvent.acquire _ _) => 0
+  | StepEvent.exec (ExecEvent.releaseNormally _ _) => 0
+  | StepEvent.cure (CureEvent.route delta) => delta p
+  | StepEvent.cure (CureEvent.drain amount) => -amount p
+  | StepEvent.cure (CureEvent.yield amount) => -amount p
+  | StepEvent.cure (CureEvent.releaseClaim _ _) => 0
+  | StepEvent.cure (CureEvent.conversionReturn _ converter spent) =>
+      if p = converter then -spent else 0
+
+def creditDelta {n m : Nat} (e : StepEvent n m) (p : ProcId n) : Qty :=
+  match e with
+  | StepEvent.cure (CureEvent.yield amount) => amount p
+  | _ => 0
+
+def netFlow {n m : Nat} (e : StepEvent n m) (p : ProcId n) : Qty :=
+  stockDelta e p + creditDelta e p
+
+abbrev Trace (n m : Nat) := List (StepEvent n m)
+
+def flowIntegral {n m : Nat} : Trace n m -> ProcId n -> Qty
+  | [], _ => 0
+  | e :: trace, p => netFlow e p + flowIntegral trace p
+
+def eventOfWork {n m : Nat} (s : CoreState n m) (plan : WorkPlan s) :
+    StepEvent n m :=
+  StepEvent.exec (ExecEvent.work plan.flow
+    (fun p => s.convertCost * (plan.convert p : Qty)))
+
+def eventOfDrain {n m : Nat} {s : CoreState n m} (plan : DrainPlan s) :
+    StepEvent n m :=
+  StepEvent.cure (CureEvent.drain plan.amount)
+
+def eventOfYield {n m : Nat} {s : CoreState n m} (plan : YieldPlan s) :
+    StepEvent n m :=
+  StepEvent.cure (CureEvent.yield plan.amount)
+
+def eventOfRoute {n m : Nat} {s : CoreState n m} (plan : RoutePlan s) :
+    StepEvent n m :=
+  StepEvent.cure (CureEvent.route plan.delta)
+
+def eventOfConversionReturn {n m : Nat} (s : CoreState n m)
+    (plan : ConversionReturnPlan s) : StepEvent n m :=
+  StepEvent.cure (CureEvent.conversionReturn
+    plan.beneficiary plan.converter
+    (s.convertCost * (plan.units : Qty)))
+
+inductive EventRel {n m : Nat} :
+    WFState n m -> StepEvent n m -> WFState n m -> Prop where
+  | work {s t : WFState n m} (plan : WorkPlan s.state)
+      (ht : t.state = workStep s.state plan) :
+      EventRel s (eventOfWork s.state plan) t
+  | acquire {s t : WFState n m} (p : ProcId n) (l : LockId m)
+      (hrun : runnable s.state p)
+      (hfree : forall q, s.state.holds q l = false)
+      (ht : t.state = acquireStep s.state p l) :
+      EventRel s (StepEvent.exec (ExecEvent.acquire p l)) t
+  | releaseNormally {s t : WFState n m} (p : ProcId n) (l : LockId m)
+      (hrun : runnable s.state p)
+      (ht : t.state = releaseStep s.state p l) :
+      EventRel s (StepEvent.exec (ExecEvent.releaseNormally p l)) t
+  | drain {s t : WFState n m} (plan : DrainPlan s.state)
+      (ht : t.state = drainStep s.state plan) :
+      EventRel s (eventOfDrain plan) t
+  | yield {s t : WFState n m} (plan : YieldPlan s.state)
+      (ht : t.state = yieldStep s.state plan) :
+      EventRel s (eventOfYield plan) t
+  | route {s t : WFState n m} (plan : RoutePlan s.state)
+      (ht : t.state = routeStep s.state plan) :
+      EventRel s (eventOfRoute plan) t
+  | releaseClaim {s t : WFState n m} (p : ProcId n) (l : LockId m)
+      (ht : t.state = releaseStep s.state p l) :
+      EventRel s (StepEvent.cure (CureEvent.releaseClaim p l)) t
+  | conversionReturn {s t : WFState n m}
+      (plan : ConversionReturnPlan s.state)
+      (ht : t.state = conversionReturnStep s.state plan) :
+      EventRel s (eventOfConversionReturn s.state plan) t
+
+theorem eventRel_is_core_step {n m : Nat} {s t : WFState n m}
+    {e : StepEvent n m} (h : EventRel s e t) : CoreRel s t := by
+  cases h with
+  | work plan ht =>
+      left; left
+      exact ⟨plan, ht⟩
+  | acquire p l hrun hfree ht =>
+      left; right; left
+      exact ⟨p, l, hrun, hfree, ht⟩
+  | releaseNormally p l hrun ht =>
+      left; right; right
+      exact ⟨p, l, hrun, ht⟩
+  | drain plan ht =>
+      right; left
+      exact ⟨plan, ht⟩
+  | yield plan ht =>
+      right; right; left
+      exact ⟨plan, ht⟩
+  | route plan ht =>
+      right; right; right; left
+      exact ⟨plan, ht⟩
+  | releaseClaim p l ht =>
+      right; right; right; right; left
+      exact ⟨p, l, ht⟩
+  | conversionReturn plan ht =>
+      right; right; right; right; right
+      exact ⟨plan, ht⟩
+
+theorem core_step_has_event {n m : Nat} {s t : WFState n m}
+    (h : CoreRel s t) : exists e, EventRel s e t := by
+  rcases h with hexec | hcure
+  · rcases hexec with hwork | hacquire | hrelease
+    · rcases hwork with ⟨plan, ht⟩
+      exact ⟨eventOfWork s.state plan, EventRel.work plan ht⟩
+    · rcases hacquire with ⟨p, l, hrun, hfree, ht⟩
+      exact ⟨StepEvent.exec (ExecEvent.acquire p l),
+        EventRel.acquire p l hrun hfree ht⟩
+    · rcases hrelease with ⟨p, l, hrun, ht⟩
+      exact ⟨StepEvent.exec (ExecEvent.releaseNormally p l),
+        EventRel.releaseNormally p l hrun ht⟩
+  · rcases hcure with hdrain | hyield | hroute | hrelease | hreturn
+    · rcases hdrain with ⟨plan, ht⟩
+      exact ⟨eventOfDrain plan, EventRel.drain plan ht⟩
+    · rcases hyield with ⟨plan, ht⟩
+      exact ⟨eventOfYield plan, EventRel.yield plan ht⟩
+    · rcases hroute with ⟨plan, ht⟩
+      exact ⟨eventOfRoute plan, EventRel.route plan ht⟩
+    · rcases hrelease with ⟨p, l, ht⟩
+      exact ⟨StepEvent.cure (CureEvent.releaseClaim p l),
+        EventRel.releaseClaim p l ht⟩
+    · rcases hreturn with ⟨plan, ht⟩
+      exact ⟨eventOfConversionReturn s.state plan,
+        EventRel.conversionReturn plan ht⟩
+
+theorem core_step_iff_has_event {n m : Nat} {s t : WFState n m} :
+    CoreRel s t <-> exists e, EventRel s e t := by
+  constructor
+  · exact core_step_has_event
+  · rintro ⟨e, he⟩
+    exact eventRel_is_core_step he
+
+inductive TypedRun {n m : Nat} :
+    WFState n m -> Trace n m -> WFState n m -> Prop where
+  | nil (s : WFState n m) : TypedRun s [] s
+  | snoc {s t u : WFState n m} {trace : Trace n m} {e : StepEvent n m} :
+      TypedRun s trace t -> EventRel t e u -> TypedRun s (trace ++ [e]) u
+
+theorem typedRun_is_core_reachable {n m : Nat}
+    {s t : WFState n m} {trace : Trace n m}
+    (hrun : TypedRun s trace t) : RTC CoreRel s t := by
+  induction hrun with
+  | nil =>
+      exact RTC.refl _
+  | snoc hrun hstep ih =>
+      exact RTC.tail ih (eventRel_is_core_step hstep)
+
+theorem core_reachable_has_trace {n m : Nat} {s t : WFState n m}
+    (reach : RTC CoreRel s t) : exists trace, TypedRun s trace t := by
+  induction reach with
+  | refl =>
+      exact ⟨[], TypedRun.nil _⟩
+  | tail reach hstep ih =>
+      rcases ih with ⟨trace, hrun⟩
+      rcases core_step_has_event hstep with ⟨e, hevent⟩
+      exact ⟨trace ++ [e], TypedRun.snoc hrun hevent⟩
+
+theorem core_reachable_iff_has_typed_trace {n m : Nat}
+    {s t : WFState n m} :
+    RTC CoreRel s t <-> exists trace, TypedRun s trace t := by
+  constructor
+  · exact core_reachable_has_trace
+  · rintro ⟨trace, hrun⟩
+    exact typedRun_is_core_reachable hrun
+
+abbrev Run {n m : Nat} (initial : WFState n m)
+    (trace : Trace n m) (final : WFState n m) : Prop :=
+  TypedRun initial trace final
+
+theorem flowIntegral_nil {n m : Nat} (p : ProcId n) :
+    flowIntegral ([] : Trace n m) p = 0 := by
+  rfl
+
+theorem flowIntegral_snoc {n m : Nat} (trace : Trace n m)
+    (e : StepEvent n m) (p : ProcId n) :
+    flowIntegral (trace ++ [e]) p = flowIntegral trace p + netFlow e p := by
+  induction trace with
+  | nil =>
+      simp [flowIntegral]
+      grind
+  | cons hd tl ih =>
+      simp [flowIntegral, ih]
+      grind
+
+theorem integral_discrete_derivative {n m : Nat} (trace : Trace n m)
+    (e : StepEvent n m) (p : ProcId n) :
+    flowIntegral (trace ++ [e]) p - flowIntegral trace p = netFlow e p := by
+  rw [flowIntegral_snoc]
+  grind
+
+theorem yield_preserves_integral {n m : Nat} (trace : Trace n m)
+    (amount : ProcId n -> Qty) (p : ProcId n) :
+    flowIntegral (trace ++ [StepEvent.cure (CureEvent.yield amount)]) p =
+      flowIntegral trace p := by
+  rw [flowIntegral_snoc]
+  unfold netFlow stockDelta creditDelta
+  grind
+
+def stockCredit {n m : Nat} (s : CoreState n m) (p : ProcId n) : Qty :=
+  (s.procs p).stock + (s.procs p).credit
+
+theorem eventRel_stockCredit {n m : Nat} {s t : WFState n m}
+    {e : StepEvent n m} (hevent : EventRel s e t) (p : ProcId n) :
+    stockCredit t.state p = stockCredit s.state p + netFlow e p := by
+  cases hevent with
+  | work plan ht =>
+      rw [ht]
+      unfold stockCredit eventOfWork netFlow stockDelta creditDelta workStep workProc
+      grind
+  | acquire actor lock hrun hfree ht =>
+      rw [ht]
+      by_cases hp : p = actor
+      · simp [stockCredit, netFlow, stockDelta, creditDelta, acquireStep, hp]
+        grind
+      · simp [stockCredit, netFlow, stockDelta, creditDelta, acquireStep, hp]
+        grind
+  | releaseNormally actor lock hrun ht =>
+      rw [ht]
+      unfold stockCredit netFlow stockDelta creditDelta releaseStep
+      grind
+  | drain plan ht =>
+      rw [ht]
+      unfold stockCredit eventOfDrain netFlow stockDelta creditDelta drainStep drainProc
+      grind
+  | yield plan ht =>
+      rw [ht]
+      unfold stockCredit eventOfYield netFlow stockDelta creditDelta yieldStep yieldProc
+      grind
+  | route plan ht =>
+      rw [ht]
+      unfold stockCredit eventOfRoute netFlow stockDelta creditDelta routeStep routeProc
+      grind
+  | releaseClaim actor lock ht =>
+      rw [ht]
+      unfold stockCredit netFlow stockDelta creditDelta releaseStep
+      grind
+  | conversionReturn plan ht =>
+      rw [ht]
+      unfold stockCredit eventOfConversionReturn netFlow stockDelta creditDelta
+      by_cases hb : p = plan.beneficiary
+      · have hbc : plan.beneficiary ≠ plan.converter :=
+          plan.endpoints_distinct
+        simp [conversionReturnStep, conversionReturnProc, hb, hbc]
+        grind
+      · by_cases hc : p = plan.converter
+        · have hcb : plan.converter ≠ plan.beneficiary :=
+            Ne.symm plan.endpoints_distinct
+          simp [conversionReturnStep, conversionReturnProc, hc, hcb]
+          grind
+        · simp [conversionReturnStep, conversionReturnProc, hb, hc]
+          grind
+
+theorem typedRun_stockCredit_eq_initial_add_integral {n m : Nat}
+    {initial final : WFState n m} {trace : Trace n m}
+    (hrun : TypedRun initial trace final) (p : ProcId n) :
+    stockCredit final.state p =
+      stockCredit initial.state p + flowIntegral trace p := by
+  induction hrun with
+  | nil =>
+      unfold stockCredit flowIntegral
+      grind
+  | snoc hrun hevent ih =>
+      rw [eventRel_stockCredit hevent p, ih, flowIntegral_snoc]
+      grind
+
+theorem stock_credit_eq_initial_add_integral {n m : Nat}
+    {initial final : WFState n m} {trace : Trace n m}
+    (hrun : Run initial trace final) (p : ProcId n) :
+    (final.state.procs p).stock + (final.state.procs p).credit =
+      (initial.state.procs p).stock + (initial.state.procs p).credit +
+        flowIntegral trace p := by
+  exact typedRun_stockCredit_eq_initial_add_integral hrun p
+
+theorem L4_stock_is_trace_integral {n m : Nat}
+    {initial final : WFState n m} {trace : Trace n m}
+    (hrun : Run initial trace final)
+    (hzero : forall p,
+      (initial.state.procs p).stock + (initial.state.procs p).credit = 0)
+    (p : ProcId n) :
+    (final.state.procs p).stock + (final.state.procs p).credit =
+      flowIntegral trace p := by
+  have h := stock_credit_eq_initial_add_integral hrun p
+  rw [hzero p] at h
+  grind
+
+def cachedIntegral {n m : Nat} (initial final : WFState n m)
+    (p : ProcId n) : Qty :=
+  (final.state.procs p).stock + (final.state.procs p).credit -
+    ((initial.state.procs p).stock + (initial.state.procs p).credit)
+
+theorem cached_integral_eq_trace_integral {n m : Nat}
+    {initial final : WFState n m} {trace : Trace n m}
+    (hrun : Run initial trace final) (p : ProcId n) :
+    cachedIntegral initial final p = flowIntegral trace p := by
+  unfold cachedIntegral
+  have h := stock_credit_eq_initial_add_integral hrun p
+  grind
+
+theorem L4_for_core_reachable {n m : Nat} {initial final : WFState n m}
+    (reach : RTC CoreRel initial final) :
+    exists trace, TypedRun initial trace final /\ forall p,
+      cachedIntegral initial final p = flowIntegral trace p := by
+  rcases core_reachable_has_trace reach with ⟨trace, hrun⟩
+  refine ⟨trace, hrun, ?_⟩
+  intro p
+  exact cached_integral_eq_trace_integral hrun p
+
+theorem L4_zero_initial_for_core_reachable {n m : Nat}
+    {initial final : WFState n m}
+    (reach : RTC CoreRel initial final)
+    (hzero : forall p, stockCredit initial.state p = 0) :
+    exists trace, TypedRun initial trace final /\ forall p,
+      stockCredit final.state p = flowIntegral trace p := by
+  rcases core_reachable_has_trace reach with ⟨trace, hrun⟩
+  refine ⟨trace, hrun, ?_⟩
+  intro p
+  have h := typedRun_stockCredit_eq_initial_add_integral hrun p
+  rw [hzero p] at h
+  grind
+
+def coreBeforeProc : CoreProc 0 :=
+  { baseRate := 1
+    stock := 0
+    credit := 0
+    convertedTotal := 0
+    convertedSinceRestart := 0
+    workNeeded := 1
+    pc := 0
+    wants := none
+    budget := 1
+    budgetCap := 1
+    done := false }
+
+def coreAfterProc : CoreProc 0 :=
+  { coreBeforeProc with stock := 1 }
+
+def coreL2Before : CoreState 1 0 :=
+  { procs := fun _ => coreBeforeProc
+    holds := fun _ l => Fin.elim0 l
+    reserve := 1
+    convertCost := 2
+    totalQ := 1 }
+
+def coreL2After : CoreState 1 0 :=
+  { procs := fun _ => coreAfterProc
+    holds := fun _ l => Fin.elim0 l
+    reserve := 0
+    convertCost := 2
+    totalQ := 1 }
+
+theorem not_blocked_no_locks {n : Nat} (s : CoreState n 0) (p : ProcId n) :
+    ¬ blocked s p := by
+  intro hb
+  rcases hb with ⟨q, hq⟩
+  rcases hq with ⟨l, _hwant, _hhold, _hneq⟩
+  exact Fin.elim0 l
+
+theorem coreL2Before_runnable (p : ProcId 1) :
+    runnable coreL2Before p := by
+  constructor
+  · rfl
+  · exact not_blocked_no_locks coreL2Before p
+
+theorem coreL2After_runnable (p : ProcId 1) :
+    runnable coreL2After p := by
+  constructor
+  · rfl
+  · exact not_blocked_no_locks coreL2After p
+
+theorem coreL2Before_convertibleStock :
+    convertibleStock coreL2Before = 0 := by
+  calc
+    convertibleStock coreL2Before =
+        sumFin (fun _ : ProcId 1 => (0 : Qty)) := by
+          unfold convertibleStock
+          apply sumFin_congr
+          intro p
+          by_cases hrun : runnable coreL2Before p
+          · simp only [hrun, ↓reduceIte]
+            simp [coreL2Before, coreBeforeProc]
+          · simp only [hrun, ↓reduceIte]
+    _ = 0 := sumFin_zero
+
+theorem coreL2After_convertibleStock :
+    convertibleStock coreL2After = 1 := by
+  calc
+    convertibleStock coreL2After =
+        sumFin (fun _ : ProcId 1 => (1 : Qty)) := by
+          unfold convertibleStock
+          apply sumFin_congr
+          intro p
+          by_cases hrun : runnable coreL2After p
+          · simp only [hrun, ↓reduceIte]
+            simp [coreL2After, coreAfterProc, coreBeforeProc]
+          · exact False.elim (hrun (coreL2After_runnable p))
+    _ = 1 := by
+          unfold sumFin
+          simp [List.finRange]
+          grind
+
+theorem unrestricted_l2_is_false :
+    exists s t : CoreState 1 0,
+      totalConverted t = totalConverted s /\
+        convertibleStock s < convertibleStock t := by
+  refine ⟨coreL2Before, coreL2After, ?_, ?_⟩
+  · unfold totalConverted coreL2Before coreL2After coreBeforeProc coreAfterProc sumFin
+    simp [List.finRange, coreBeforeProc]
+  · rw [coreL2Before_convertibleStock, coreL2After_convertibleStock]
+    grind
+
+def pid0 : ProcId 2 := ⟨0, by decide⟩
+def pid1 : ProcId 2 := ⟨1, by decide⟩
+def lid0 : LockId 2 := ⟨0, by decide⟩
+def lid1 : LockId 2 := ⟨1, by decide⟩
+
+theorem proc2_cases {motive : ProcId 2 -> Prop}
+    (h0 : motive pid0) (h1 : motive pid1) :
+    forall p, motive p := by
+  intro p
+  refine Fin.cases ?_ ?_ p
+  · exact h0
+  · intro q
+    refine Fin.cases ?_ ?_ q
+    · exact h1
+    · intro z
+      exact Fin.elim0 z
+
+theorem lock2_cases {motive : LockId 2 -> Prop}
+    (h0 : motive lid0) (h1 : motive lid1) :
+    forall l, motive l := by
+  intro l
+  refine Fin.cases ?_ ?_ l
+  · exact h0
+  · intro q
+    refine Fin.cases ?_ ?_ q
+    · exact h1
+    · intro z
+      exact Fin.elim0 z
+
+def cycleProc0 : CoreProc 2 :=
+  { baseRate := 1
+    stock := 0
+    credit := 0
+    convertedTotal := 0
+    convertedSinceRestart := 0
+    workNeeded := 1
+    pc := 0
+    wants := some lid1
+    budget := 1
+    budgetCap := 1
+    done := false }
+
+def cycleProc1 : CoreProc 2 :=
+  { baseRate := 1
+    stock := 0
+    credit := 0
+    convertedTotal := 0
+    convertedSinceRestart := 0
+    workNeeded := 1
+    pc := 0
+    wants := some lid0
+    budget := 1
+    budgetCap := 1
+    done := false }
+
+def cycleProc (p : ProcId 2) : CoreProc 2 :=
+  if p = pid0 then cycleProc0 else cycleProc1
+
+def cycleHolds (p : ProcId 2) (l : LockId 2) : Bool :=
+  (p = pid0 && l = lid0) || (p = pid1 && l = lid1)
+
+def cycleState : CoreState 2 2 :=
+  { procs := cycleProc
+    holds := cycleHolds
+    reserve := 0
+    convertCost := 1
+    totalQ := 0 }
+
+theorem cycleState_wf : CoreWF cycleState := by
+  constructor
+  · simp [cycleState]
+    grind
+  · simp [cycleState]
+  · intro p
+    apply proc2_cases (motive := fun p => 0 <= (cycleState.procs p).stock)
+    · simp [cycleState, cycleProc, cycleProc0, pid0]
+    · simp [cycleState, cycleProc, cycleProc1, pid0, pid1]
+  · intro p
+    apply proc2_cases (motive := fun p => 0 <= (cycleState.procs p).credit)
+    · simp [cycleState, cycleProc, cycleProc0, pid0]
+    · simp [cycleState, cycleProc, cycleProc1, pid0, pid1]
+  · intro p
+    apply proc2_cases (motive := fun p => 0 <= (cycleState.procs p).baseRate)
+    · simp [cycleState, cycleProc, cycleProc0, pid0]
+      grind
+    · simp [cycleState, cycleProc, cycleProc1, pid0, pid1]
+      grind
+  · intro p
+    apply proc2_cases
+      (motive := fun p => (cycleState.procs p).budget <= (cycleState.procs p).budgetCap)
+    · simp [cycleState, cycleProc, cycleProc0, pid0]
+    · simp [cycleState, cycleProc, cycleProc1, pid0, pid1]
+  · intro p
+    apply proc2_cases (motive := fun p =>
+      (cycleState.procs p).convertedSinceRestart <= (cycleState.procs p).convertedTotal)
+    · simp [cycleState, cycleProc, cycleProc0, pid0]
+    · simp [cycleState, cycleProc, cycleProc1, pid0, pid1]
+  · intro p l hdone
+    apply proc2_cases (motive := fun p =>
+      (cycleState.procs p).done = true -> cycleState.holds p l = false)
+    · intro h
+      simp [cycleState, cycleProc, cycleProc0, pid0] at h
+    · intro h
+      simp [cycleState, cycleProc, cycleProc1, pid0, pid1] at h
+    · exact hdone
+  · unfold accounted cycleState
+    have hsum :
+        sumFin (fun p => procAccounted (1 : Qty) (cycleProc p)) = 0 := by
+      calc
+        sumFin (fun p => procAccounted (1 : Qty) (cycleProc p)) =
+            sumFin (fun _ : ProcId 2 => (0 : Qty)) := by
+              apply sumFin_congr
+              intro p
+              apply proc2_cases (motive := fun p =>
+                procAccounted (1 : Qty) (cycleProc p) = 0)
+              · simp [procAccounted, cycleProc, cycleProc0, pid0]
+                grind
+              · simp [procAccounted, cycleProc, cycleProc1, pid0, pid1]
+                grind
+        _ = 0 := sumFin_zero
+    simp [hsum]
+    grind
+
+def cycleWFState : WFState 2 2 :=
+  { state := cycleState
+    wf := cycleState_wf }
+
+def cycleBrokenState : CoreState 2 2 :=
+  releaseStep cycleState pid1 lid1
+
+theorem cycleBrokenState_wf : CoreWF cycleBrokenState := by
+  constructor
+  · simp [cycleBrokenState, releaseStep, cycleState]
+    grind
+  · simp [cycleBrokenState, releaseStep, cycleState]
+  · intro p
+    apply proc2_cases (motive := fun p => 0 <= (cycleBrokenState.procs p).stock)
+    · simp [cycleBrokenState, releaseStep, cycleState, cycleProc, cycleProc0, pid0]
+    · simp [cycleBrokenState, releaseStep, cycleState, cycleProc, cycleProc1, pid0, pid1]
+  · intro p
+    apply proc2_cases (motive := fun p => 0 <= (cycleBrokenState.procs p).credit)
+    · simp [cycleBrokenState, releaseStep, cycleState, cycleProc, cycleProc0, pid0]
+    · simp [cycleBrokenState, releaseStep, cycleState, cycleProc, cycleProc1, pid0, pid1]
+  · intro p
+    apply proc2_cases (motive := fun p => 0 <= (cycleBrokenState.procs p).baseRate)
+    · simp [cycleBrokenState, releaseStep, cycleState, cycleProc, cycleProc0, pid0]
+      grind
+    · simp [cycleBrokenState, releaseStep, cycleState, cycleProc, cycleProc1, pid0, pid1]
+      grind
+  · intro p
+    apply proc2_cases
+      (motive := fun p =>
+        (cycleBrokenState.procs p).budget <= (cycleBrokenState.procs p).budgetCap)
+    · simp [cycleBrokenState, releaseStep, cycleState, cycleProc, cycleProc0, pid0]
+    · simp [cycleBrokenState, releaseStep, cycleState, cycleProc, cycleProc1, pid0, pid1]
+  · intro p
+    apply proc2_cases (motive := fun p =>
+      (cycleBrokenState.procs p).convertedSinceRestart <=
+        (cycleBrokenState.procs p).convertedTotal)
+    · simp [cycleBrokenState, releaseStep, cycleState, cycleProc, cycleProc0, pid0]
+    · simp [cycleBrokenState, releaseStep, cycleState, cycleProc, cycleProc1, pid0, pid1]
+  · intro p l hdone
+    apply proc2_cases (motive := fun p =>
+      (cycleBrokenState.procs p).done = true -> cycleBrokenState.holds p l = false)
+    · intro h
+      simp [cycleBrokenState, releaseStep, cycleState, cycleProc, cycleProc0, pid0] at h
+    · intro h
+      simp [cycleBrokenState, releaseStep, cycleState, cycleProc, cycleProc1, pid0, pid1] at h
+    · exact hdone
+  · simpa [cycleBrokenState, releaseStep] using cycleState_wf.accounted_eq_total
+
+def cycleBrokenWFState : WFState 2 2 :=
+  { state := cycleBrokenState
+    wf := cycleBrokenState_wf }
+
+def cycleComponent : ProcId 2 -> Bool :=
+  fun _ => true
+
+theorem cycle_closed : ClosedDependencySet cycleState cycleComponent := by
+  apply proc2_cases (motive := fun p =>
+    cycleComponent p = true ->
+      unfinished cycleState p /\ exists q, cycleComponent q = true /\ blockedOn cycleState p q)
+  · intro _hp
+    constructor
+    · simp [unfinished, cycleState, cycleProc, cycleProc0, pid0]
+    · refine ⟨pid1, rfl, ?_⟩
+      refine ⟨lid1, ?_, ?_, ?_⟩
+      · simp [cycleState, cycleProc, cycleProc0, pid0, lid1]
+      · simp [cycleState, cycleHolds, pid0, pid1, lid0, lid1]
+      · unfold pid0 pid1
+        decide
+  · intro _hp
+    constructor
+    · simp [unfinished, cycleState, cycleProc, cycleProc1, pid0, pid1]
+    · refine ⟨pid0, rfl, ?_⟩
+      refine ⟨lid0, ?_, ?_, ?_⟩
+      · simp [cycleState, cycleProc, cycleProc1, pid0, pid1, lid0]
+      · simp [cycleState, cycleHolds, pid0, pid1, lid0, lid1]
+      · unfold pid0 pid1
+        decide
+
+theorem cycle_release_breaks_closed :
+    ¬ ClosedDependencySet cycleBrokenState cycleComponent := by
+  intro hC
+  have h0 := hC pid0 rfl
+  rcases h0.2 with ⟨q, _hq, hblock⟩
+  rcases hblock with ⟨l, hwant, hhold, hneq⟩
+  have hq : q = pid1 := by
+    apply proc2_cases (motive := fun q => blockedOn cycleBrokenState pid0 q -> q = pid1)
+    · intro hb
+      rcases hb with ⟨k, _hw, _hh, hne⟩
+      simp at hne
+    · intro _hb
+      rfl
+    · exact ⟨l, hwant, hhold, hneq⟩
+  subst hq
+  have hl : l = lid1 := by
+    apply lock2_cases (motive := fun l => (cycleBrokenState.procs pid0).wants = some l -> l = lid1)
+    · intro hw
+      unfold cycleBrokenState releaseStep cycleState cycleProc cycleProc0 pid0 pid1 lid0 lid1 at hw
+      simp at hw
+    · intro _hw
+      rfl
+    · exact hwant
+  subst hl
+  unfold cycleBrokenState releaseStep cycleState cycleHolds pid0 pid1 lid0 lid1 at hhold
+  simp at hhold
+
+theorem cure_can_break_absorption :
+    exists (s t : WFState 2 2) (C : ProcId 2 -> Bool),
+      ClosedDependencySet s.state C /\ CureRel s t /\
+        ¬ ClosedDependencySet t.state C := by
+  refine ⟨cycleWFState, cycleBrokenWFState, cycleComponent, ?_, ?_, ?_⟩
+  · exact cycle_closed
+  · right; right; right; left
+    exact ⟨pid1, lid1, rfl⟩
+  · exact cycle_release_breaks_closed
+
+/-
+Separate compatibility obligations for a future full old-to-new simulation.
+The operational `CoreRel`/`TypedRun` commuting square does not imply these
+cross-model simulations:
+
+- old L1 conservation should lift to `core_reachable_conserves_accounted`;
+- old blocked-stock monotonicity should lift to `blocked_stock_monotone`;
+- old BudgetWait detection should lift to the unified detector surface;
+- old yield conservation should lift to `cure_preserves_accounted`.
+
+They are intentionally documented here as obligations, not theorem declarations.
+-/
+
+end
+
+end CoreTrace
+end IsoConserve

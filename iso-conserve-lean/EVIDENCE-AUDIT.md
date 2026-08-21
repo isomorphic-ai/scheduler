@@ -1,0 +1,291 @@
+# Lean Evidence Audit
+
+- Git HEAD: `c050813`
+- Report note: this records the tree at the Git HEAD above; rerun `tools/lean-evidence-audit` for the current HEAD.
+- Worktree dirty at audit run: `no`
+- Build: `PASS`
+- Sorry/admit/axiom scan: `PASS`
+- Headline `#print axioms`: `PASS`
+- Allowed axiom baseline: `[propext, Classical.choice, Quot.sound]` and subsets only
+- Lean modules: `21`
+- Source lines under `IsoConserve/`: `8766`
+- Syntactic theorem/lemma declarations: `504`
+- Declaration-counting rule: count source lines under `IsoConserve/` whose first non-whitespace token is `theorem` or `lemma`; the 431 snapshot included four `: True` compatibility placeholders later demoted at `2a29078`, while the 427 Pro snapshot did not.
+- Review #9 headline-name note: all four requested exports still exist as `PaperClaims.L1_conservation`, `PaperClaims.core_trace_integral`, `PaperClaims.detector_sound`, and `PaperClaims.hoarding_is_self_defeating`; the last now has the dynamical finite-certified-policy signature supplied by B3.
+
+## Current Formalization Numbers
+
+| Metric | Generated count |
+|---|---:|
+| Lean modules under `IsoConserve/` | 21 |
+| Source lines under `IsoConserve/` | 8766 |
+| Syntactic `theorem`/`lemma` declarations | 504 |
+
+## Build Log
+
+```text
+Build completed successfully (24 jobs).
+```
+
+## Sorry Admit Axiom Scan
+
+No matches under `IsoConserve/`.
+
+## Headline Axioms
+
+```text
+'IsoConserve.PaperClaims.L1_conservation' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.core_trace_integral' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.detector_sound' does not depend on any axioms
+'IsoConserve.PaperClaims.hoarding_is_self_defeating' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.L1_conservation' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.L2_monotone' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.L2_drain_monotone' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.blocked_stock_monotone' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.L3_absorbing' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.reachable_deadlock_absorbing' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.L4_stock_is_integral' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.yield_conservation' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.wf_reachable' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.l4_reachable' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.polarity_claim_one' does not depend on any axioms
+'IsoConserve.trust_on_absence_loss_counterexample' depends on axioms: [propext]
+'IsoConserve.pythonRatePlan_conservation' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.canonicalPythonStepRel_is_mixedRel' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.canonical_step_uses_derived_routed_rates' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.pythonRoutedRateStep_verified_mixed' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.credit_monotone_under_yield_reachable' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.WaitGraph.L3_waitComponent_absorbing_iter' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.WaitGraph.detection_sound' depends on axioms: [propext, Quot.sound]
+'IsoConserve.BudgetWait.detection_sound_with_budget_evidence' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.BudgetWait.closed_wait_set_detected_within_budget' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.CoreTrace.core_step_conserves_accounted' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.core_reachable_conserves_accounted' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.no_progress_convertible_stock_monotone' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.CoreTrace.blocked_stock_monotone' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.deadlock_exec_fixed' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.closed_wait_set_exec_absorbing' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.closed_wait_set_converted_total_fixed' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.cure_preserves_accounted' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.cure_can_break_absorption' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.wf_workStep' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.wf_drainStep' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.wf_yieldStep' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.wf_routeStep' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.wf_acquireStep' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.wf_releaseStep' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.conversion_return_conservation' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.wf_conversionReturnStep' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.conversionReturnStep_totalConverted' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.conversionReturnStep_stock_le' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.workStepOfWF_is_workRel' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.acquireStepOfWF_is_execAcquireRel' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.execReleaseStepOfWF_is_execReleaseRel' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.drainStepOfWF_is_drainRel' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.yieldStepOfWF_is_yieldRel' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.routeStepOfWF_is_routeRel' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.claimReleaseStepOfWF_is_releaseClaimRel' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.CoreTrace.conversionReturnStepOfWF_is_conversionReturnRel' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.CoreTrace.core_step_has_event' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.core_step_iff_has_event' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.core_reachable_has_trace' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.core_reachable_iff_has_typed_trace' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.stock_credit_eq_initial_add_integral' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.L4_stock_is_trace_integral' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.L4_for_core_reachable' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.L4_zero_initial_for_core_reachable' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.CoreTrace.unrestricted_l2_is_false' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.DetectorProgress.detector_sound' does not depend on any axioms
+'IsoConserve.DetectorProgress.periodic_conversion_never_floors' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.DetectorProgress.live_process_not_detected' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.DetectorProgress.closed_deadlock_eventually_floors' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.DetectorProgress.deadlock_eventually_detected' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.DetectorProgress.detection_latency_le_budget' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.DetectorProgress.useful_reporter_never_reclaimed' depends on axioms: [propext]
+'IsoConserve.DetectorProgress.spinner_eventually_reclaimed' depends on axioms: [propext, Quot.sound]
+'IsoConserve.DetectorProgress.liar_survives_in_loop_if_it_reports_progress' depends on axioms: [propext]
+'IsoConserve.DetectorProgress.liar_fails_reputation_check' depends on axioms: [propext, Quot.sound]
+'IsoConserve.ResolutionYield.resolution_yield_conserves' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.ResolutionYield.resolution_yield_preserves_coreWF' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.ResolutionYield.resolution_yield_loses_no_accounted_work' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.ResolutionYield.no_victim_accounted_progress_preserved' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.ResolutionYield.accounted_includes_banked_work' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.ResolutionYield.credit_monotone' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.ResolutionYield.restart_has_base_plus_credit' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.ResolutionYield.resolution_yield_releases_held_locks' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.ResolutionYield.yield_releases_wait_edge' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.ResolutionYield.yield_breaks_closed_component' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.ResolutionYield.least_credit_choice_spreads_burden' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.ResolutionYield.canonical_credit_policy_completes_in_two_yields' depends on axioms: [propext]
+'IsoConserve.ResolutionYield.canonical_discard_policy_livelocks_for_all_n' depends on axioms: [propext]
+'IsoConserve.ResolutionYield.positive_credit_gain_finite_requirement_eventually_completes' depends on axioms: [propext]
+'IsoConserve.RateRouting.routed_rate_conserved' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.RateRouting.effective_rate_eq_base_plus_waiters' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.RateRouting.transitive_rate_routing' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.RateRouting.multiple_waiters_sum_not_max' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.RateRouting.pathfinder_low_share_eq_ten_thirteenths' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.RateRouting.no_stored_boost_state' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PNCounter.merge_assoc' depends on axioms: [propext, Quot.sound]
+'IsoConserve.PNCounter.eval_eq_globalRecorded' depends on axioms: [propext, Quot.sound]
+'IsoConserve.PNCounter.off_partition_decrement_surfaces' depends on axioms: [propext]
+'IsoConserve.TheoremOne.route_stranded_claim_strictly_dominates_hoard' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.TheoremOne.selfish_optima_eq_generous_optima' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.TheoremOne.route_realizes_conversion' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.TheoremOne.routed_claim_is_routeRel' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.TheoremOne.routed_claim_is_core_step' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.TheoremOne.route_certified_outcome_realizes_conversion' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.TheoremOne.hoard_realizes_zero_conversion' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.TheoremOne.release_realizes_zero_conversion' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.TheoremOne.route_strictly_dominates_hoard' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.TheoremOne.selfish_optimum_contains_no_stranded_claim_in_finite_certified_policies' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.TheoremOne.selfish_optima_eq_generous_optima_in_finite_certified_policies' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.TheoremOne.global_debt_sums_to_zero' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.Noether.mixedRel_accounted_clockFree' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.epistemic_invariant' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.alignment_invariant' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.agency_invariant' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.Flexibility.collapse_whole_invariant' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.core_conservation' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.L2_monotonicity' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.legacy_blocked_stock_monotonicity' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.L2_drain_monotonicity' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.L3_absorption' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.core_deadlock_exec_fixed' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.core_closed_wait_set_absorbing' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.L3_wait_component_absorption' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.L4_stock_integral' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.L4_for_core_reachable' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.detection_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.detection_complete_bounded' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.detection_latency_le_budget' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.live_process_not_detected' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.progress_signal_useful_kept' depends on axioms: [propext]
+'IsoConserve.PaperClaims.progress_signal_spinner_reclaimed' depends on axioms: [propext, Quot.sound]
+'IsoConserve.PaperClaims.resolution_credit_core' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.resolution_yield_conserves' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.resolution_yield_loses_no_work' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.resolution_yield_breaks_closed_component' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.PaperClaims.canonical_python_step_verified' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.canonical_step_uses_derived_routed_rates' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.PaperClaims.python_routed_rate_step_verified' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.routed_rate_conserved' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.effective_rate_eq_base_plus_waiters' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.transitive_rate_routing' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.multiple_waiters_sum_not_max' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.priority_inversion_cannot_form' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.pathfinder_low_share_eq_ten_thirteenths' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.PaperClaims.pathfinder_medium_share_eq_three_thirteenths' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.PaperClaims.no_stored_boost_state' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.pn_counter_merge_converges' depends on axioms: [propext, Quot.sound]
+'IsoConserve.PaperClaims.pn_counter_debt_surfaces' depends on axioms: [propext]
+'IsoConserve.PaperClaims.pn_counter_merge_assoc' depends on axioms: [propext, Quot.sound]
+'IsoConserve.PaperClaims.positive_trust_survives_loss' does not depend on any axioms
+'IsoConserve.PaperClaims.absence_is_not_evidence' depends on axioms: [propext]
+'IsoConserve.PaperClaims.unrestricted_l2_is_false' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.clock_free_accounted' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.epistemic_invariant' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.alignment_invariant' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.agency_invariant' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.collapse_whole_invariant' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.flexibility_collapse_whole_invariant' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.PaperClaims.route_realizes_conversion' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.selfish_optimum_contains_no_stranded_claim' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'IsoConserve.PaperClaims.selfish_optima_eq_generous_optima' depends on axioms: [propext, Classical.choice, Quot.sound]
+'IsoConserve.PaperClaims.debt_sums_to_zero' depends on axioms: [propext, Classical.choice, Quot.sound]
+```
+
+## Module Inventory
+
+```text
+IsoConserve/Basic.lean
+IsoConserve/BudgetWait.lean
+IsoConserve/Canonical.lean
+IsoConserve/CoreTrace.lean
+IsoConserve/DetectorProgress.lean
+IsoConserve/Flexibility.lean
+IsoConserve/L1Conservation.lean
+IsoConserve/L2Monotone.lean
+IsoConserve/L3Absorbing.lean
+IsoConserve/L4Integral.lean
+IsoConserve/Noether.lean
+IsoConserve/PNCounter.lean
+IsoConserve/PaperClaims.lean
+IsoConserve/PaperInvariants.lean
+IsoConserve/Polarity.lean
+IsoConserve/RateRouting.lean
+IsoConserve/Reachable.lean
+IsoConserve/ResolutionYield.lean
+IsoConserve/ShareSum.lean
+IsoConserve/TheoremOne.lean
+IsoConserve/WaitGraph.lean
+```
+
+## Current Paper-To-Lean Matrix
+
+| Paper claim | Current Lean evidence | Status | Boundary |
+|---|---|---|---|
+| L1 conservation | `IsoConserve.L1_conservation`, reachable accounting corollaries | proved | plan-abstracted kernel |
+| L2 monotonicity | `IsoConserve.blocked_stock_monotone`, `IsoConserve.L2_drain_monotone` | proved | repaired blocked/drain scope |
+| L3 absorption | `IsoConserve.L3_absorbing`, `IsoConserve.WaitGraph.L3_waitComponent_absorbing_iter` | proved | old kernel plus supplied closed wait component |
+| L4 stock/integral | `IsoConserve.L4_stock_is_integral`, `IsoConserve.CoreTrace.L4_stock_is_trace_integral`, `IsoConserve.CoreTrace.L4_for_core_reachable` | proved | old kernel uses cached field; CoreTrace derives one certified operational trace for every reachable execution |
+| Detection bounded completeness | `IsoConserve.BudgetWait.closed_wait_set_detected_within_budget` | proved | supplied closed component/window evidence |
+| Detection soundness with evidence | `IsoConserve.BudgetWait.detection_sound_with_budget_evidence` | proved | supplied closed component |
+| Resolution credit core | `IsoConserve.credit_monotone_under_yield_reachable` | proved | stock-to-credit core, not full restart yield |
+| Caching polarity | `IsoConserve.polarity_claim_one` and counterexample | proved | positive-trust lattice theorem |
+| Canonical Python flow step | `IsoConserve.canonicalPythonStepRel_is_mixedRel`, `IsoConserve.canonical_step_uses_derived_routed_rates`, `IsoConserve.pythonRoutedRateStep_verified_mixed` | proved | supplied weights bridge plus derived routed-rate bridge with positive denominator |
+| Paper invariants | `epistemic_invariant`, `alignment_invariant`, `agency_invariant` | proved | ledger-level corollaries |
+| Flexibility collapse | `IsoConserve.Flexibility.collapse_whole_invariant` | proved | conservation identity only |
+| Noether slice | `IsoConserve.Noether.mixedRel_accounted_clockFree` | proved | uniqueness obstructed |
+| PaperClaims closure surface | `IsoConserve.PaperClaims.*` aliases for core trace, detector, resolution, routing, PN-counter, flexibility, Theorem 1, polarity, invariants | proved | Theorem 1 aliases now target realized finite certified policies; source modules define exact scope |
+| Unified core trace | `IsoConserve.CoreTrace.core_reachable_conserves_accounted`, `IsoConserve.CoreTrace.core_reachable_iff_has_typed_trace`, `IsoConserve.CoreTrace.L4_for_core_reachable`, `IsoConserve.CoreTrace.wf_workStep`, `IsoConserve.CoreTrace.wf_conversionReturnStep` | proved | `TypedRun` is exactly `RTC CoreRel`; all eight admissible step arms construct `WFState`; separate full old-to-new simulations remain unproved |
+| Rate routing | `IsoConserve.RateRouting.routed_rate_conserved`, `IsoConserve.RateRouting.effective_rate_eq_base_plus_waiters`, `IsoConserve.RateRouting.multiple_waiters_sum_not_max`, `IsoConserve.RateRouting.pathfinder_low_share_eq_ten_thirteenths`, `IsoConserve.RateRouting.no_stored_boost_state`, `IsoConserve.canonical_step_uses_derived_routed_rates` | proved | destination-sum KCL, partition-certified recursive equation, sum-not-max, exact shares, memoryless return, and derived-rate canonical bridge |
+| PN-counter distribution | `IsoConserve.PNCounter.merge_assoc`, `IsoConserve.PNCounter.eval_eq_globalRecorded`, `IsoConserve.PNCounter.off_partition_decrement_surfaces` | proved | honest per-node ledgers by max; no CAP/gossip/Byzantine theorem |
+| Detector/progress signal | `IsoConserve.DetectorProgress.detector_sound`, `IsoConserve.DetectorProgress.detection_latency_le_budget`, `IsoConserve.DetectorProgress.live_process_not_detected`, `IsoConserve.DetectorProgress.liar_fails_reputation_check` | proved | supplied component; selected-attempt schedule; honest signal plus reputation |
+| Resolution yield | `IsoConserve.ResolutionYield.resolution_yield_conserves`, `IsoConserve.ResolutionYield.resolution_yield_preserves_coreWF`, `IsoConserve.ResolutionYield.yield_breaks_closed_component`, `IsoConserve.ResolutionYield.positive_credit_gain_finite_requirement_eventually_completes` | proved | preservation constructs `resolutionYieldWFState`; component breakage needs a supplied released-edge witness; Nat-unit toy termination |
+| Theorem 1 realized finite-policy core | `IsoConserve.TheoremOne.routed_claim_is_routeRel`, `IsoConserve.TheoremOne.route_realizes_conversion`, `IsoConserve.TheoremOne.route_certified_outcome_realizes_conversion`, `IsoConserve.TheoremOne.route_strictly_dominates_hoard`, `IsoConserve.TheoremOne.selfish_optima_eq_generous_optima_in_finite_certified_policies` | proved | actual route/return/drain runs; exact `q = κ·k`; named finite certified claim-policy fallback |
+| Unrestricted legacy claim policy | `IsoConserve.TheoremOne.Policy`, FINDINGS 38–39 | rejected | unrelated and uncertified actions make the intended universal optimum equality false; no theorem is claimed |
+| Production/engine closure | `04j-paper-claims-task.md` | partial | empirical production behavior and engine-only rows remain outside Lean |

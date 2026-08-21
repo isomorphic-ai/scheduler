@@ -1,0 +1,364 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  lean-evidence-audit [--write]
+
+Runs the current Lean evidence audit for iso-conserve-lean:
+  - lake build
+  - sorry/admit/axiom scan
+  - source/module/theorem counts
+  - #print axioms for the current headline theorem set
+  - current paper-to-Lean matrix
+
+With --write, writes iso-conserve-lean/EVIDENCE-AUDIT.md.
+Without --write, prints the report to stdout.
+USAGE
+}
+
+write=0
+while (($#)); do
+  case "$1" in
+    --write)
+      write=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'lean-evidence-audit: unknown option: %s\n' "$1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+repo=$(git rev-parse --show-toplevel 2>/dev/null) || {
+  printf 'lean-evidence-audit: not inside a git worktree\n' >&2
+  exit 2
+}
+
+lean_dir="$repo/iso-conserve-lean"
+[[ -d "$lean_dir" ]] || {
+  printf 'lean-evidence-audit: missing %s\n' "$lean_dir" >&2
+  exit 2
+}
+
+cd "$lean_dir"
+
+review_nine_paperclaims=(
+  IsoConserve.PaperClaims.L1_conservation
+  IsoConserve.PaperClaims.core_trace_integral
+  IsoConserve.PaperClaims.detector_sound
+  IsoConserve.PaperClaims.hoarding_is_self_defeating
+)
+
+headline_theorems=(
+  "${review_nine_paperclaims[@]}"
+  IsoConserve.L1_conservation
+  IsoConserve.L2_monotone
+  IsoConserve.L2_drain_monotone
+  IsoConserve.blocked_stock_monotone
+  IsoConserve.L3_absorbing
+  IsoConserve.reachable_deadlock_absorbing
+  IsoConserve.L4_stock_is_integral
+  IsoConserve.yield_conservation
+  IsoConserve.wf_reachable
+  IsoConserve.l4_reachable
+  IsoConserve.polarity_claim_one
+  IsoConserve.trust_on_absence_loss_counterexample
+  IsoConserve.pythonRatePlan_conservation
+  IsoConserve.canonicalPythonStepRel_is_mixedRel
+  IsoConserve.canonical_step_uses_derived_routed_rates
+  IsoConserve.pythonRoutedRateStep_verified_mixed
+  IsoConserve.credit_monotone_under_yield_reachable
+  IsoConserve.WaitGraph.L3_waitComponent_absorbing_iter
+  IsoConserve.WaitGraph.detection_sound
+  IsoConserve.BudgetWait.detection_sound_with_budget_evidence
+  IsoConserve.BudgetWait.closed_wait_set_detected_within_budget
+  IsoConserve.CoreTrace.core_step_conserves_accounted
+  IsoConserve.CoreTrace.core_reachable_conserves_accounted
+  IsoConserve.CoreTrace.no_progress_convertible_stock_monotone
+  IsoConserve.CoreTrace.blocked_stock_monotone
+  IsoConserve.CoreTrace.deadlock_exec_fixed
+  IsoConserve.CoreTrace.closed_wait_set_exec_absorbing
+  IsoConserve.CoreTrace.closed_wait_set_converted_total_fixed
+  IsoConserve.CoreTrace.cure_preserves_accounted
+  IsoConserve.CoreTrace.cure_can_break_absorption
+  IsoConserve.CoreTrace.wf_workStep
+  IsoConserve.CoreTrace.wf_drainStep
+  IsoConserve.CoreTrace.wf_yieldStep
+  IsoConserve.CoreTrace.wf_routeStep
+  IsoConserve.CoreTrace.wf_acquireStep
+  IsoConserve.CoreTrace.wf_releaseStep
+  IsoConserve.CoreTrace.conversion_return_conservation
+  IsoConserve.CoreTrace.wf_conversionReturnStep
+  IsoConserve.CoreTrace.conversionReturnStep_totalConverted
+  IsoConserve.CoreTrace.conversionReturnStep_stock_le
+  IsoConserve.CoreTrace.workStepOfWF_is_workRel
+  IsoConserve.CoreTrace.acquireStepOfWF_is_execAcquireRel
+  IsoConserve.CoreTrace.execReleaseStepOfWF_is_execReleaseRel
+  IsoConserve.CoreTrace.drainStepOfWF_is_drainRel
+  IsoConserve.CoreTrace.yieldStepOfWF_is_yieldRel
+  IsoConserve.CoreTrace.routeStepOfWF_is_routeRel
+  IsoConserve.CoreTrace.claimReleaseStepOfWF_is_releaseClaimRel
+  IsoConserve.CoreTrace.conversionReturnStepOfWF_is_conversionReturnRel
+  IsoConserve.CoreTrace.core_step_has_event
+  IsoConserve.CoreTrace.core_step_iff_has_event
+  IsoConserve.CoreTrace.core_reachable_has_trace
+  IsoConserve.CoreTrace.core_reachable_iff_has_typed_trace
+  IsoConserve.CoreTrace.stock_credit_eq_initial_add_integral
+  IsoConserve.CoreTrace.L4_stock_is_trace_integral
+  IsoConserve.CoreTrace.L4_for_core_reachable
+  IsoConserve.CoreTrace.L4_zero_initial_for_core_reachable
+  IsoConserve.CoreTrace.unrestricted_l2_is_false
+  IsoConserve.DetectorProgress.detector_sound
+  IsoConserve.DetectorProgress.periodic_conversion_never_floors
+  IsoConserve.DetectorProgress.live_process_not_detected
+  IsoConserve.DetectorProgress.closed_deadlock_eventually_floors
+  IsoConserve.DetectorProgress.deadlock_eventually_detected
+  IsoConserve.DetectorProgress.detection_latency_le_budget
+  IsoConserve.DetectorProgress.useful_reporter_never_reclaimed
+  IsoConserve.DetectorProgress.spinner_eventually_reclaimed
+  IsoConserve.DetectorProgress.liar_survives_in_loop_if_it_reports_progress
+  IsoConserve.DetectorProgress.liar_fails_reputation_check
+  IsoConserve.ResolutionYield.resolution_yield_conserves
+  IsoConserve.ResolutionYield.resolution_yield_preserves_coreWF
+  IsoConserve.ResolutionYield.resolution_yield_loses_no_accounted_work
+  IsoConserve.ResolutionYield.no_victim_accounted_progress_preserved
+  IsoConserve.ResolutionYield.accounted_includes_banked_work
+  IsoConserve.ResolutionYield.credit_monotone
+  IsoConserve.ResolutionYield.restart_has_base_plus_credit
+  IsoConserve.ResolutionYield.resolution_yield_releases_held_locks
+  IsoConserve.ResolutionYield.yield_releases_wait_edge
+  IsoConserve.ResolutionYield.yield_breaks_closed_component
+  IsoConserve.ResolutionYield.least_credit_choice_spreads_burden
+  IsoConserve.ResolutionYield.canonical_credit_policy_completes_in_two_yields
+  IsoConserve.ResolutionYield.canonical_discard_policy_livelocks_for_all_n
+  IsoConserve.ResolutionYield.positive_credit_gain_finite_requirement_eventually_completes
+  IsoConserve.RateRouting.routed_rate_conserved
+  IsoConserve.RateRouting.effective_rate_eq_base_plus_waiters
+  IsoConserve.RateRouting.transitive_rate_routing
+  IsoConserve.RateRouting.multiple_waiters_sum_not_max
+  IsoConserve.RateRouting.pathfinder_low_share_eq_ten_thirteenths
+  IsoConserve.RateRouting.no_stored_boost_state
+  IsoConserve.PNCounter.merge_assoc
+  IsoConserve.PNCounter.eval_eq_globalRecorded
+  IsoConserve.PNCounter.off_partition_decrement_surfaces
+  IsoConserve.TheoremOne.route_stranded_claim_strictly_dominates_hoard
+  IsoConserve.TheoremOne.selfish_optima_eq_generous_optima
+  IsoConserve.TheoremOne.route_realizes_conversion
+  IsoConserve.TheoremOne.routed_claim_is_routeRel
+  IsoConserve.TheoremOne.routed_claim_is_core_step
+  IsoConserve.TheoremOne.route_certified_outcome_realizes_conversion
+  IsoConserve.TheoremOne.hoard_realizes_zero_conversion
+  IsoConserve.TheoremOne.release_realizes_zero_conversion
+  IsoConserve.TheoremOne.route_strictly_dominates_hoard
+  IsoConserve.TheoremOne.selfish_optimum_contains_no_stranded_claim_in_finite_certified_policies
+  IsoConserve.TheoremOne.selfish_optima_eq_generous_optima_in_finite_certified_policies
+  IsoConserve.TheoremOne.global_debt_sums_to_zero
+  IsoConserve.Noether.mixedRel_accounted_clockFree
+  IsoConserve.epistemic_invariant
+  IsoConserve.alignment_invariant
+  IsoConserve.agency_invariant
+  IsoConserve.Flexibility.collapse_whole_invariant
+  IsoConserve.PaperClaims.core_conservation
+  IsoConserve.PaperClaims.L2_monotonicity
+  IsoConserve.PaperClaims.legacy_blocked_stock_monotonicity
+  IsoConserve.PaperClaims.L2_drain_monotonicity
+  IsoConserve.PaperClaims.L3_absorption
+  IsoConserve.PaperClaims.core_deadlock_exec_fixed
+  IsoConserve.PaperClaims.core_closed_wait_set_absorbing
+  IsoConserve.PaperClaims.L3_wait_component_absorption
+  IsoConserve.PaperClaims.L4_stock_integral
+  IsoConserve.PaperClaims.L4_for_core_reachable
+  IsoConserve.PaperClaims.detection_sound
+  IsoConserve.PaperClaims.detection_complete_bounded
+  IsoConserve.PaperClaims.detection_latency_le_budget
+  IsoConserve.PaperClaims.live_process_not_detected
+  IsoConserve.PaperClaims.progress_signal_useful_kept
+  IsoConserve.PaperClaims.progress_signal_spinner_reclaimed
+  IsoConserve.PaperClaims.resolution_credit_core
+  IsoConserve.PaperClaims.resolution_yield_conserves
+  IsoConserve.PaperClaims.resolution_yield_loses_no_work
+  IsoConserve.PaperClaims.resolution_yield_breaks_closed_component
+  IsoConserve.PaperClaims.canonical_python_step_verified
+  IsoConserve.PaperClaims.canonical_step_uses_derived_routed_rates
+  IsoConserve.PaperClaims.python_routed_rate_step_verified
+  IsoConserve.PaperClaims.routed_rate_conserved
+  IsoConserve.PaperClaims.effective_rate_eq_base_plus_waiters
+  IsoConserve.PaperClaims.transitive_rate_routing
+  IsoConserve.PaperClaims.multiple_waiters_sum_not_max
+  IsoConserve.PaperClaims.priority_inversion_cannot_form
+  IsoConserve.PaperClaims.pathfinder_low_share_eq_ten_thirteenths
+  IsoConserve.PaperClaims.pathfinder_medium_share_eq_three_thirteenths
+  IsoConserve.PaperClaims.no_stored_boost_state
+  IsoConserve.PaperClaims.pn_counter_merge_converges
+  IsoConserve.PaperClaims.pn_counter_debt_surfaces
+  IsoConserve.PaperClaims.pn_counter_merge_assoc
+  IsoConserve.PaperClaims.positive_trust_survives_loss
+  IsoConserve.PaperClaims.absence_is_not_evidence
+  IsoConserve.PaperClaims.unrestricted_l2_is_false
+  IsoConserve.PaperClaims.clock_free_accounted
+  IsoConserve.PaperClaims.epistemic_invariant
+  IsoConserve.PaperClaims.alignment_invariant
+  IsoConserve.PaperClaims.agency_invariant
+  IsoConserve.PaperClaims.collapse_whole_invariant
+  IsoConserve.PaperClaims.flexibility_collapse_whole_invariant
+  IsoConserve.PaperClaims.route_realizes_conversion
+  IsoConserve.PaperClaims.selfish_optimum_contains_no_stranded_claim
+  IsoConserve.PaperClaims.selfish_optima_eq_generous_optima
+  IsoConserve.PaperClaims.debt_sums_to_zero
+)
+
+tmpdir=$(mktemp -d)
+cleanup() {
+  rm -rf "$tmpdir"
+}
+trap cleanup EXIT
+
+build_log="$tmpdir/build.log"
+scan_log="$tmpdir/scan.log"
+axioms_lean="$tmpdir/Axioms.lean"
+axioms_log="$tmpdir/axioms.log"
+report="$tmpdir/report.md"
+
+build_status=PASS
+if ! lake build >"$build_log" 2>&1; then
+  build_status=FAIL
+fi
+
+scan_status=PASS
+if rg -n "\\b(sorry|admit|axiom)\\b" IsoConserve >"$scan_log"; then
+  scan_status=FAIL
+else
+  : >"$scan_log"
+fi
+
+{
+  printf 'import IsoConserve\n\n'
+  for theorem in "${headline_theorems[@]}"; do
+    printf '#print axioms %s\n' "$theorem"
+  done
+} >"$axioms_lean"
+
+axioms_status=PASS
+if ! lake env lean "$axioms_lean" >"$axioms_log" 2>&1; then
+  axioms_status=FAIL
+fi
+
+bad_axioms=$(
+  tr '[],' '   ' <"$axioms_log" |
+    grep -Eo "[A-Za-z_][A-Za-z0-9_'.]*" |
+    grep -Ev "^(IsoConserve[.A-Za-z0-9_']*|depends|on|axioms|does|not|depend|any|propext|Classical.choice|Quot.sound)$" |
+    sort -u || true
+)
+if [[ -n "$bad_axioms" ]]; then
+  axioms_status=FAIL
+fi
+
+module_count=$(find IsoConserve -type f -name '*.lean' | wc -l | tr -d ' ')
+source_lines=$(find IsoConserve -type f -name '*.lean' -print0 |
+  xargs -0 wc -l | tail -n 1 | awk '{print $1}')
+decl_count=$(rg -n '^[[:space:]]*(theorem|lemma)[[:space:]]+' IsoConserve |
+  wc -l | tr -d ' ')
+commit=$(git -C "$repo" rev-parse --short HEAD)
+dirty="no"
+if [[ -n "$(git -C "$repo" status --short)" ]]; then
+  dirty="yes"
+fi
+
+{
+  printf '# Lean Evidence Audit\n\n'
+  printf -- '- Git HEAD: `%s`\n' "$commit"
+  printf -- '- Report note: this records the tree at the Git HEAD above; rerun `tools/lean-evidence-audit` for the current HEAD.\n'
+  printf -- '- Worktree dirty at audit run: `%s`\n' "$dirty"
+  printf -- '- Build: `%s`\n' "$build_status"
+  printf -- '- Sorry/admit/axiom scan: `%s`\n' "$scan_status"
+  printf -- '- Headline `#print axioms`: `%s`\n' "$axioms_status"
+  printf -- '- Allowed axiom baseline: `[propext, Classical.choice, Quot.sound]` and subsets only\n'
+  printf -- '- Lean modules: `%s`\n' "$module_count"
+  printf -- '- Source lines under `IsoConserve/`: `%s`\n' "$source_lines"
+  printf -- '- Syntactic theorem/lemma declarations: `%s`\n' "$decl_count"
+  printf -- '- Declaration-counting rule: count source lines under `IsoConserve/` whose first non-whitespace token is `theorem` or `lemma`; the 431 snapshot included four `: True` compatibility placeholders later demoted at `2a29078`, while the 427 Pro snapshot did not.\n'
+  printf -- '- Review #9 headline-name note: all four requested exports still exist as `PaperClaims.L1_conservation`, `PaperClaims.core_trace_integral`, `PaperClaims.detector_sound`, and `PaperClaims.hoarding_is_self_defeating`; the last now has the dynamical finite-certified-policy signature supplied by B3.\n\n'
+
+  printf '## Current Formalization Numbers\n\n'
+  printf '| Metric | Generated count |\n'
+  printf '|---|---:|\n'
+  printf '| Lean modules under `IsoConserve/` | %s |\n' "$module_count"
+  printf '| Source lines under `IsoConserve/` | %s |\n' "$source_lines"
+  printf '| Syntactic `theorem`/`lemma` declarations | %s |\n\n' "$decl_count"
+
+  printf '## Build Log\n\n'
+  printf '```text\n'
+  cat "$build_log"
+  printf '```\n\n'
+
+  printf '## Sorry Admit Axiom Scan\n\n'
+  if [[ "$scan_status" == PASS ]]; then
+    printf 'No matches under `IsoConserve/`.\n\n'
+  else
+    printf '```text\n'
+    cat "$scan_log"
+    printf '```\n\n'
+  fi
+
+  printf '## Headline Axioms\n\n'
+  if [[ -n "$bad_axioms" ]]; then
+    printf 'Disallowed axiom tokens:\n\n'
+    printf '```text\n'
+    printf '%s\n' "$bad_axioms"
+    printf '```\n\n'
+  fi
+  printf '```text\n'
+  cat "$axioms_log"
+  printf '```\n\n'
+
+  printf '## Module Inventory\n\n'
+  printf '```text\n'
+  find IsoConserve -type f -name '*.lean' | sort
+  printf '```\n\n'
+
+  printf '## Current Paper-To-Lean Matrix\n\n'
+  cat <<'MATRIX'
+| Paper claim | Current Lean evidence | Status | Boundary |
+|---|---|---|---|
+| L1 conservation | `IsoConserve.L1_conservation`, reachable accounting corollaries | proved | plan-abstracted kernel |
+| L2 monotonicity | `IsoConserve.blocked_stock_monotone`, `IsoConserve.L2_drain_monotone` | proved | repaired blocked/drain scope |
+| L3 absorption | `IsoConserve.L3_absorbing`, `IsoConserve.WaitGraph.L3_waitComponent_absorbing_iter` | proved | old kernel plus supplied closed wait component |
+| L4 stock/integral | `IsoConserve.L4_stock_is_integral`, `IsoConserve.CoreTrace.L4_stock_is_trace_integral`, `IsoConserve.CoreTrace.L4_for_core_reachable` | proved | old kernel uses cached field; CoreTrace derives one certified operational trace for every reachable execution |
+| Detection bounded completeness | `IsoConserve.BudgetWait.closed_wait_set_detected_within_budget` | proved | supplied closed component/window evidence |
+| Detection soundness with evidence | `IsoConserve.BudgetWait.detection_sound_with_budget_evidence` | proved | supplied closed component |
+| Resolution credit core | `IsoConserve.credit_monotone_under_yield_reachable` | proved | stock-to-credit core, not full restart yield |
+| Caching polarity | `IsoConserve.polarity_claim_one` and counterexample | proved | positive-trust lattice theorem |
+| Canonical Python flow step | `IsoConserve.canonicalPythonStepRel_is_mixedRel`, `IsoConserve.canonical_step_uses_derived_routed_rates`, `IsoConserve.pythonRoutedRateStep_verified_mixed` | proved | supplied weights bridge plus derived routed-rate bridge with positive denominator |
+| Paper invariants | `epistemic_invariant`, `alignment_invariant`, `agency_invariant` | proved | ledger-level corollaries |
+| Flexibility collapse | `IsoConserve.Flexibility.collapse_whole_invariant` | proved | conservation identity only |
+| Noether slice | `IsoConserve.Noether.mixedRel_accounted_clockFree` | proved | uniqueness obstructed |
+| PaperClaims closure surface | `IsoConserve.PaperClaims.*` aliases for core trace, detector, resolution, routing, PN-counter, flexibility, Theorem 1, polarity, invariants | proved | Theorem 1 aliases now target realized finite certified policies; source modules define exact scope |
+| Unified core trace | `IsoConserve.CoreTrace.core_reachable_conserves_accounted`, `IsoConserve.CoreTrace.core_reachable_iff_has_typed_trace`, `IsoConserve.CoreTrace.L4_for_core_reachable`, `IsoConserve.CoreTrace.wf_workStep`, `IsoConserve.CoreTrace.wf_conversionReturnStep` | proved | `TypedRun` is exactly `RTC CoreRel`; all eight admissible step arms construct `WFState`; separate full old-to-new simulations remain unproved |
+| Rate routing | `IsoConserve.RateRouting.routed_rate_conserved`, `IsoConserve.RateRouting.effective_rate_eq_base_plus_waiters`, `IsoConserve.RateRouting.multiple_waiters_sum_not_max`, `IsoConserve.RateRouting.pathfinder_low_share_eq_ten_thirteenths`, `IsoConserve.RateRouting.no_stored_boost_state`, `IsoConserve.canonical_step_uses_derived_routed_rates` | proved | destination-sum KCL, partition-certified recursive equation, sum-not-max, exact shares, memoryless return, and derived-rate canonical bridge |
+| PN-counter distribution | `IsoConserve.PNCounter.merge_assoc`, `IsoConserve.PNCounter.eval_eq_globalRecorded`, `IsoConserve.PNCounter.off_partition_decrement_surfaces` | proved | honest per-node ledgers by max; no CAP/gossip/Byzantine theorem |
+| Detector/progress signal | `IsoConserve.DetectorProgress.detector_sound`, `IsoConserve.DetectorProgress.detection_latency_le_budget`, `IsoConserve.DetectorProgress.live_process_not_detected`, `IsoConserve.DetectorProgress.liar_fails_reputation_check` | proved | supplied component; selected-attempt schedule; honest signal plus reputation |
+| Resolution yield | `IsoConserve.ResolutionYield.resolution_yield_conserves`, `IsoConserve.ResolutionYield.resolution_yield_preserves_coreWF`, `IsoConserve.ResolutionYield.yield_breaks_closed_component`, `IsoConserve.ResolutionYield.positive_credit_gain_finite_requirement_eventually_completes` | proved | preservation constructs `resolutionYieldWFState`; component breakage needs a supplied released-edge witness; Nat-unit toy termination |
+| Theorem 1 realized finite-policy core | `IsoConserve.TheoremOne.routed_claim_is_routeRel`, `IsoConserve.TheoremOne.route_realizes_conversion`, `IsoConserve.TheoremOne.route_certified_outcome_realizes_conversion`, `IsoConserve.TheoremOne.route_strictly_dominates_hoard`, `IsoConserve.TheoremOne.selfish_optima_eq_generous_optima_in_finite_certified_policies` | proved | actual route/return/drain runs; exact `q = κ·k`; named finite certified claim-policy fallback |
+| Unrestricted legacy claim policy | `IsoConserve.TheoremOne.Policy`, FINDINGS 38–39 | rejected | unrelated and uncertified actions make the intended universal optimum equality false; no theorem is claimed |
+| Production/engine closure | `04j-paper-claims-task.md` | partial | empirical production behavior and engine-only rows remain outside Lean |
+MATRIX
+} >"$report"
+
+if [[ "$build_status" != PASS || "$scan_status" != PASS || "$axioms_status" != PASS ]]; then
+  cat "$report"
+  exit 1
+fi
+
+if ((write)); then
+  cp "$report" "$lean_dir/EVIDENCE-AUDIT.md"
+  printf 'wrote %s\n' "$lean_dir/EVIDENCE-AUDIT.md"
+else
+  cat "$report"
+fi
